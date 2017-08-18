@@ -1,0 +1,61 @@
+import hashes, strutils, keywords
+
+type
+  IDobj* = ref object of RootObj
+    id*: int # unique id; use this for comparisons and not the pointers
+
+  Ident* = ref object of IDobj
+    s*: string
+    next*: Ident             # for hash-table chaining
+    h*: Hash                 # hash value of s
+
+  IdentCache* = ref object
+    buckets: array[0..4096 * 2 - 1, Ident]
+    wordCounter: int
+    idAnon*, emptyIdent*: Ident
+
+proc `$`*(self: Ident): string =
+  result = if self.isNil: "nil" else: self.s
+
+proc getIdent*(self: IdentCache; ident: cstring, len: int, h: Hash): Ident =
+  let idx = h and high(self.buckets)
+  result = self.buckets[idx]
+  var last: Ident = nil
+  var id = 0
+  while result != nil:
+    if equalMem(cstring(result.s), ident, len):
+      if last != nil:
+        # make access to last looked up identifier faster:
+        last.next = result.next
+        result.next = self.buckets[idx]
+        self.buckets[idx] = result
+      return
+    last = result
+    result = result.next
+
+  new(result)
+  result.h = h
+  result.s = newString(len)
+  copyMem(result.s.cstring, ident, len)
+  result.next = self.buckets[idx]
+  self.buckets[idx] = result
+  if id == 0:
+    inc(self.wordCounter)
+    result.id = -self.wordCounter
+  else:
+    result.id = id
+
+proc getIdent*(self: IdentCache; ident: string): Ident =
+  result = self.getIdent(cstring(ident), len(ident), hash(ident))
+
+proc getIdent*(self: IdentCache; ident: string, h: Hash): Ident =
+  result = self.getIdent(cstring(ident), len(ident), h)
+
+proc newIdentCache*(): IdentCache =
+  new(result)
+  result.idAnon = result.getIdent":anonymous"
+  result.wordCounter = 1
+  result.emptyIdent = result.getIdent("")
+  # initialize the keywords:
+  for s in countup(succ(low(specialWords)), high(specialWords)):
+    result.getIdent(specialWords[s], hash(specialWords[s])).id = ord(s)

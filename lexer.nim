@@ -1,7 +1,8 @@
-import lexbase, strutils, streams, unicode, os
+import lexbase, strutils, streams, unicode, os, idents
 
 type
   Lexer = object of BaseLexer
+    identCache: IdentCache
     nextState: LexerState
     tokenStartPos: int
     c: char
@@ -12,9 +13,15 @@ type
     tkComma, tkDot, tkDotDot, tkOpr
     tkParLe, tkParRi, tkCurlyLe, tkCurlyRi, tkBracketLe, tkBracketRi
 
+  TokenVal = object {.union.}
+    iNumber: uint64
+    fNumber: float64
+    ident: Ident
+
   Token = object
     kind: TokenKind
     indent: int
+    val: TokenVal
     literal: string
     line, col: int
 
@@ -51,10 +58,11 @@ proc stateString(lex: var Lexer, tok: var Token): bool
 proc stateCharLit(lex: var Lexer, tok: var Token): bool
 {.pop.}
 
-proc initLexer(stream: Stream): Lexer =
+proc initLexer*(stream: Stream, identCache: IdentCache): Lexer =
   result.open(stream)
   result.nextState = stateOuterScope
   result.c = result.buf[result.bufpos]
+  result.identCache = identCache
 
 proc advance(lex: var Lexer, step = 1) =
   lex.bufpos.inc(step)
@@ -169,10 +177,8 @@ proc stateNestedComment(lex: var Lexer, tok: var Token): bool =
   var level = 1
   while true:
     case lex.c
-    of '\c':
-      lex.lexCR
-    of '\l':
-      lex.lexLF
+    of '\c': lex.lexCR
+    of '\l': lex.lexLF
     of '#':
       if lex.nextChar == '[':
         lex.advance
@@ -197,10 +203,37 @@ proc stateIdentifier(lex: var Lexer, tok: var Token): bool =
   while lex.c in IdentChars:
     lex.advance
   tok.literal = lex.tokenLit
+  tok.val.ident = lex.identCache.getIdent(tok.literal)
   lex.nextState = stateOuterScope
   result = true
 
+proc charToInt(c: char): int =
+  case c
+  of {'0'..'9'}: result = ord(c) - ord('0')
+  of {'a'..'f'}: result = ord(c) - ord('a') + 10
+  of {'A'..'F'}: result = ord(c) - ord('A') + 10
+  else: result = 0
+
+proc parseBoundedInt(lex: var Lexer, val: string, base: int, maxVal: uint64, start = 0): uint64 =
+  result = 0
+  for i in start.. <val.len:
+    result = result * uint64(base)
+    let c  = uint64(charToInt(val[i]))
+    let ov = maxVal - result
+    if c > ov:
+      raise lexError(lex, "number overflow")
+    else: result += c
+
 proc stateNumber(lex: var Lexer, tok: var Token): bool =
+  type
+    NumberType = enum
+      UnknownNumber
+      OrdinaryNumber
+      HexNumber
+      OctalNumber
+      BinaryNumber
+      FloatNumber
+
   template matchChars(lex: var Lexer, validRange, wideRange: set[char]) =
     while true:
       while lex.c in wideRange:
@@ -217,7 +250,7 @@ proc stateNumber(lex: var Lexer, tok: var Token): bool =
       if lex.c notin wideRange:
         break
 
-  var ordinaryNumber = false
+  var numberType = UnknownNumber
   if lex.c == '0':
     let nc = lex.nextChar
     tok.literal.add lex.c
@@ -227,25 +260,29 @@ proc stateNumber(lex: var Lexer, tok: var Token): bool =
       tok.literal.add lex.c
       lex.advance
       lex.matchChars(HexDigits, Letters + Digits)
+      numberType = HexNumber
     of 'c', 'o', 'C', 'O':
       tok.literal.add lex.c
       lex.advance
       lex.matchChars(OctalDigits, Digits)
+      numberType = OctalNumber
     of 'b', 'B':
       tok.literal.add lex.c
       lex.advance
       lex.matchChars(BinaryDigits, Digits)
+      numberType = BinaryNumber
     else:
-      ordinaryNumber = true
+      numberType = OrdinaryNumber
   else:
-    ordinaryNumber = true
+    numberType = OrdinaryNumber
 
-  if ordinaryNumber:
+  if numberType == OrdinaryNumber:
     lex.matchChars(Digits, Digits)
     if lex.c == '.':
       tok.literal.add lex.c
       lex.advance
       tok.kind = tkFloat
+      numberType = FloatNumber
 
     if tok.kind == tkFloat:
       lex.matchChars(Digits, Digits)
@@ -261,6 +298,19 @@ proc stateNumber(lex: var Lexer, tok: var Token): bool =
         while lex.c in Digits:
           tok.literal.add lex.c
           lex.advance
+
+  when defined(cpu64):
+    const maxVal = 0xFFFFFFFF_FFFFFFFF'u64
+  else:
+    const maxVal = 0xFFFFFFFF'u32
+
+  case numberType
+  of OrdinaryNumber: tok.val.iNumber = lex.parseBoundedInt(tok.literal, 10, maxVal)
+  of HexNumber: tok.val.iNumber = lex.parseBoundedInt(tok.literal, 16, maxVal, 2)
+  of OctalNumber: tok.val.iNumber = lex.parseBoundedInt(tok.literal, 8, maxVal, 2)
+  of BinaryNumber: tok.val.iNumber = lex.parseBoundedInt(tok.literal, 2, maxVal, 2)
+  of FloatNumber: tok.val.fNumber = parseFloat(tok.literal)
+  else: raise lexError(lex, "unknown number type")
 
   lex.nextState = stateOuterScope
   result = true
@@ -382,7 +432,7 @@ proc stateCharLit(lex: var Lexer, tok: var Token): bool =
   lex.nextState = stateOuterScope
   result = true
 
-proc initToken(): Token =
+proc initToken*(): Token =
   result.kind = tkEof
   result.indent = -1
   result.literal = ""
@@ -397,7 +447,8 @@ proc nextToken(lex: var Lexer): bool =
 
 proc main() =
   var input = newFileStream(paramStr(1))
-  var lex = initLexer(input)
+  var identCache = newIdentCache()
+  var lex = initLexer(input, identCache)
   while lex.nextToken(): discard
 
 main()
