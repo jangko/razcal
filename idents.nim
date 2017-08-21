@@ -17,13 +17,13 @@ type
 proc `$`*(self: Ident): string =
   result = if self.isNil: "nil" else: self.s
 
-proc getIdent*(self: IdentCache; ident: cstring, len: int, h: Hash): Ident =
+proc getIdent*(self: IdentCache; ident: string, h: Hash): Ident =
   let idx = h and high(self.buckets)
   result = self.buckets[idx]
-  var last: Ident = nil
+  var last = Ident(nil)
   var id = 0
   while result != nil:
-    if equalMem(cstring(result.s), ident, len):
+    if result.s == ident:
       if last != nil:
         # make access to last looked up identifier faster:
         last.next = result.next
@@ -35,8 +35,7 @@ proc getIdent*(self: IdentCache; ident: cstring, len: int, h: Hash): Ident =
 
   new(result)
   result.h = h
-  result.s = newString(len)
-  copyMem(result.s.cstring, ident, len)
+  result.s = ident
   result.next = self.buckets[idx]
   self.buckets[idx] = result
   if id == 0:
@@ -46,10 +45,7 @@ proc getIdent*(self: IdentCache; ident: cstring, len: int, h: Hash): Ident =
     result.id = id
 
 proc getIdent*(self: IdentCache; ident: string): Ident =
-  result = self.getIdent(cstring(ident), len(ident), hash(ident))
-
-proc getIdent*(self: IdentCache; ident: string, h: Hash): Ident =
-  result = self.getIdent(cstring(ident), len(ident), h)
+  result = self.getIdent(ident, hash(ident))
 
 proc newIdentCache*(): IdentCache =
   new(result)

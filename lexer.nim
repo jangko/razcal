@@ -1,29 +1,29 @@
-import lexbase, strutils, streams, unicode, os, idents
+import lexbase, strutils, streams, idents
 
 type
-  Lexer = object of BaseLexer
+  Lexer* = object of BaseLexer
     identCache: IdentCache
     nextState: LexerState
     tokenStartPos: int
     c: char
 
-  TokenKind = enum
+  TokenKind* = enum
     tkEof, tkComment, tkNestedComment, tkIdentifier, tkNumber, tkFloat
     tkString, tkCharLit, tkColon, tkColonColon, tkSemiColon, tkAccent
     tkComma, tkDot, tkDotDot, tkOpr
     tkParLe, tkParRi, tkCurlyLe, tkCurlyRi, tkBracketLe, tkBracketRi
 
-  TokenVal = object {.union.}
-    iNumber: uint64
-    fNumber: float64
-    ident: Ident
+  TokenVal* = object {.union.}
+    iNumber*: uint64
+    fNumber*: float64
+    ident*: Ident
 
-  Token = object
-    kind: TokenKind
-    indent: int
-    val: TokenVal
-    literal: string
-    line, col: int
+  Token* = object
+    kind*: TokenKind
+    indent*: int
+    val*: TokenVal
+    literal*: string
+    line*, col*: int
 
   LexerState = proc(lex: var Lexer, tok: var Token): bool {.locks: 0, gcSafe.}
 
@@ -78,7 +78,7 @@ proc tokenLit(lex: Lexer): string =
   result = newString(lex.tokenLen)
   copyMem(result.cstring, lex.buf[lex.tokenStartPos].unsafeAddr, result.len)
 
-proc next*(lex: var Lexer, tok: var Token) =
+proc getToken*(lex: var Lexer, tok: var Token) =
   while not lex.nextState(lex, tok): discard
 
 proc lexError(lex: Lexer, message: string): ref LexerError {.raises: [].} =
@@ -438,18 +438,3 @@ proc initToken*(): Token =
   result.literal = ""
   result.line = 0
   result.col = 0
-
-proc nextToken(lex: var Lexer): bool =
-  var tok = initToken()
-  lex.next(tok)
-  echo tok
-  result = tok.kind != tkEof
-
-proc main() =
-  var input = newFileStream(paramStr(1))
-  var identCache = newIdentCache()
-  var lex = initLexer(input, identCache)
-  while lex.nextToken(): discard
-
-main()
-
