@@ -8,7 +8,7 @@ type
     c: char
 
   TokenKind* = enum
-    tkEof, tkComment, tkNestedComment, tkIdentifier, tkNumber, tkFloat
+    tkInvalid, tkEof, tkComment, tkNestedComment, tkIdent, tkNumber, tkFloat
     tkString, tkCharLit, tkColon, tkColonColon, tkSemiColon, tkAccent
     tkComma, tkDot, tkDotDot, tkOpr
     tkParLe, tkParRi, tkCurlyLe, tkCurlyRi, tkBracketLe, tkBracketRi
@@ -18,10 +18,10 @@ type
     fNumber*: float64
     ident*: Ident
 
-  Token* = object
+  Token* {.acyclic.} = object
     kind*: TokenKind
-    indent*: int
     val*: TokenVal
+    indent*: int
     literal*: string
     line*, col*: int
 
@@ -98,13 +98,17 @@ proc lexLF(lex: var Lexer) =
 template singleToken(tokKind: TokenKind) =
   tok.col = lex.getColNumber(lex.bufpos)
   tok.kind = tokKind
+  tok.literal.add lex.c
+  lex.advance
   return true
 
 template doubleToken(kindSingle: TokenKind, secondChar: char, kindDouble: TokenKind) =
   tok.col = lex.getColNumber(lex.bufpos)
+  tok.literal.add lex.c
   if lex.nextChar == secondChar:
     lex.advance
     tok.kind = kindDouble
+    tok.literal.add lex.c
   else:
     tok.kind = kindSingle
   lex.advance
@@ -144,13 +148,15 @@ proc stateOuterScope(lex: var Lexer, tok: var Token): bool =
   of '\l':
     lex.lexLF
     return false
-  of IdentStartChars: tokenNextState(tkIdentifier, stateIdentifier)
+  of IdentStartChars: tokenNextState(tkIdent, stateIdentifier)
   of Digits: tokenNextState(tkNumber, stateNumber)
   of '"': tokenNextState(tkString, stateString)
   of '\'': tokenNextState(tkCharLit, stateCharLit)
   of ':': doubleToken(tkColon, ':', tkColonColon)
   of '.': doubleToken(tkDot, '.', tkDotDot)
-  of EndOfFile: singleToken(tkEof)
+  of EndOfFile:
+    tok.indent = 0
+    singleToken(tkEof)
   of ';': singleToken(tkSemiColon)
   of '`': singleToken(tkAccent)
   of '(': singleToken(tkParLe)
@@ -161,7 +167,13 @@ proc stateOuterScope(lex: var Lexer, tok: var Token): bool =
   of ']': singleToken(tkBracketRi)
   of ',': singleToken(tkComma)
   else:
-    if lex.c in OpChars: singleToken(tkOpr)
+    if lex.c in OpChars:
+      tok.col = lex.getColNumber(lex.bufpos)
+      tok.kind = tkOpr
+      tok.literal.add lex.c
+      tok.val.ident = lex.identCache.getIdent(tok.literal)
+      lex.advance
+      return true
     else: raise lexError(lex, "unexpected token: '" & $lex.c & "'")
 
   result = true
@@ -433,8 +445,15 @@ proc stateCharLit(lex: var Lexer, tok: var Token): bool =
   result = true
 
 proc initToken*(): Token =
-  result.kind = tkEof
+  result.kind = tkInvalid
   result.indent = -1
   result.literal = ""
   result.line = 0
   result.col = 0
+
+proc reset*(tok: var Token) =
+  tok.kind = tkInvalid
+  tok.indent = -1
+  tok.literal.setLen(0)
+  tok.line = 0
+  tok.col = 0
