@@ -59,7 +59,7 @@ proc stateCharLit(lex: var Lexer, tok: var Token): bool
 proc stateOperator(lex: var Lexer, tok: var Token): bool
 {.pop.}
 
-proc initLexer*(stream: Stream, identCache: IdentCache): Lexer =
+proc openLexer*(stream: Stream, identCache: IdentCache): Lexer =
   result.open(stream)
   result.nextState = stateOuterScope
   result.c = result.buf[result.bufpos]

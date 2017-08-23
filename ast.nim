@@ -16,14 +16,10 @@ type
     lineInfo*: LineInfo
 
   NodeKind* = enum
-    nkInfix
-    nkPrefix
-    nkPostfix
-    nkInt, nkUInt
-    nkFloat
-    nkString
-    nkIdent
-    nkCall
+    nkInfix, nkPrefix, nkPostfix
+    nkInt, nkUInt, nkFloat
+    nkString, nkIdent, nkSymbol
+    nkCall, nkDotCall
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object
@@ -84,9 +80,8 @@ proc val*(n: Node): string =
   of nkIdent: result = $n.ident
   else: result = ""
 
-const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkIdent}
-
 proc treeRepr*(n: Node, indent = 0): string =
+  const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkIdent}
   let spaces = repeat(' ', indent)
   if n.isNil: return spaces & "nil"
   result = "$1$2: $3\n" % [spaces, $n.kind, n.val]

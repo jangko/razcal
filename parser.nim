@@ -9,6 +9,9 @@ type
     tok*: Token
     fileIndex: int32
 
+  MsgKind = enum
+    errInvalidIndentation
+
 proc getTok(p: var Parser) =
   p.tok.reset()
   p.lex.getToken(p.tok)
@@ -19,6 +22,22 @@ proc getTok(p: var Parser) =
 proc parError(p: var Parser, msg: string) =
   echo msg
   quit(1)
+
+proc parError(p: var Parser, msgKind: MsgKind) =
+  echo msgKind
+  quit(1)
+
+template realInd(p): bool = p.tok.indent > p.currInd
+template sameInd(p): bool = p.tok.indent == p.currInd
+template sameOrNoInd(p): bool = p.tok.indent == p.currInd or p.tok.indent < 0
+
+proc optPar(p: var Parser) =
+  if p.tok.indent >= 0:
+    if p.tok.indent < p.currInd: parError(p, errInvalidIndentation)
+
+proc optInd(p: var Parser, n: Node) =
+  if p.tok.indent >= 0:
+    if not realInd(p): parError(p, errInvalidIndentation)
 
 proc getLineInfo(p: Parser): LineInfo =
   result.line = int16(p.tok.line)
@@ -41,9 +60,9 @@ proc newFloatNodeP(p: Parser): Node =
   result = newFloatNode(nkFloat, p.tok.val.fNumber)
   result.lineInfo = p.getLineInfo
 
-proc initParser*(inputStream: Stream, identCache: IdentCache): Parser =
+proc openParser*(inputStream: Stream, identCache: IdentCache): Parser =
   result.tok = initToken()
-  result.lex = initLexer(inputStream, identCache)
+  result.lex = openLexer(inputStream, identCache)
   result.getTok() # read the first token
   result.firstTok = true
 
@@ -77,6 +96,12 @@ proc primary(p: var Parser): Node =
   of tkIdent:
     result = newIdentNodeP(p)
     p.getTok()
+    while p.tok.kind == tkDot:
+      p.getTok()
+      if p.tok.kind != tkIdent:
+        p.parError("identifier expected")
+      result = newNodeP(p, nkDotCall, result, newIdentNodeP(p))
+      p.getTok()
   else:
     result = nil
     #p.parError("unrecognized token: " & $p.tok.kind)
@@ -116,9 +141,10 @@ proc parseExpr(p: var Parser, minPrec: int): Node =
 proc main() =
   var input = newFileStream(paramStr(1))
   var identCache = newIdentCache()
-  var p = initParser(input, identCache)
+  var p = openParser(input, identCache)
   var root = p.parseExpr(-1)
   echo root.treeRepr
+  p.close()
 
 main()
 
