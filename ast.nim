@@ -20,6 +20,7 @@ type
     nkInt, nkUInt, nkFloat
     nkString, nkIdent, nkSymbol
     nkCall, nkDotCall
+    nkStmtList
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object
