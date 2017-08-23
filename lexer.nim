@@ -56,6 +56,7 @@ proc stateIdentifier(lex: var Lexer, tok: var Token): bool
 proc stateNumber(lex: var Lexer, tok: var Token): bool
 proc stateString(lex: var Lexer, tok: var Token): bool
 proc stateCharLit(lex: var Lexer, tok: var Token): bool
+proc stateOperator(lex: var Lexer, tok: var Token): bool
 {.pop.}
 
 proc initLexer*(stream: Stream, identCache: IdentCache): Lexer =
@@ -167,13 +168,7 @@ proc stateOuterScope(lex: var Lexer, tok: var Token): bool =
   of ']': singleToken(tkBracketRi)
   of ',': singleToken(tkComma)
   else:
-    if lex.c in OpChars:
-      tok.col = lex.getColNumber(lex.bufpos)
-      tok.kind = tkOpr
-      tok.literal.add lex.c
-      tok.val.ident = lex.identCache.getIdent(tok.literal)
-      lex.advance
-      return true
+    if lex.c in OpChars: tokenNextstate(tkOpr, stateOperator)
     else: raise lexError(lex, "unexpected token: '" & $lex.c & "'")
 
   result = true
@@ -441,6 +436,14 @@ proc stateCharLit(lex: var Lexer, tok: var Token): bool =
     raise lexError(lex, "missing final quote")
 
   lex.advance
+  lex.nextState = stateOuterScope
+  result = true
+
+proc stateOperator(lex: var Lexer, tok: var Token): bool =
+  while lex.c in OpChars:
+    tok.literal.add lex.c
+    lex.advance
+  tok.val.ident = lex.identCache.getIdent(tok.literal)
   lex.nextState = stateOuterScope
   result = true
 

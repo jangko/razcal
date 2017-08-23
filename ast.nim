@@ -13,7 +13,7 @@ type
   Symbol* = ref SymbolObj
   SymbolObj* {.acyclic.} = object of IDobj
     name*: Ident
-    info*: LineInfo
+    lineInfo*: LineInfo
 
   NodeKind* = enum
     nkInfix
@@ -38,14 +38,14 @@ type
       ident*: Ident
     else:
       sons*: seq[Node]
-    info*: LineInfo
+    lineInfo*: LineInfo
 
 proc newNode*(kind: NodeKind): Node =
   new(result)
   result.kind = kind
-  result.info.line = -1
-  result.info.col = -1
-  result.info.fileIndex = -1
+  result.lineInfo.line = -1
+  result.lineInfo.col = -1
+  result.lineInfo.fileIndex = -1
 
 proc newIntNode*(kind: NodeKind, intVal: BiggestUInt): Node =
   result = newNode(kind)
@@ -67,9 +67,9 @@ proc newTree*(kind: NodeKind; children: varargs[Node]): Node =
   result = newNode(kind)
   result.sons = @children
 
-proc newNodeI*(kind: NodeKind, info: LineInfo): Node =
+proc newNodeI*(kind: NodeKind, lineInfo: LineInfo): Node =
   result = newNode(kind)
-  result.info = info
+  result.lineInfo = lineInfo
 
 proc addSon*(father, son: Node) =
   assert son != nil
@@ -85,10 +85,11 @@ proc val*(n: Node): string =
   else: result = ""
 
 const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkIdent}
-    
+
 proc treeRepr*(n: Node, indent = 0): string =
   let spaces = repeat(' ', indent)
-  result = "$1$2: $3\n" % [spaces, $n.kind, n.val]  
+  if n.isNil: return spaces & "nil"
+  result = "$1$2: $3\n" % [spaces, $n.kind, n.val]
   if n.kind notin NodeWithVal and not n.sons.isNil:
     for s in n.sons:
       result.add treeRepr(s, indent + 2)

@@ -7,6 +7,7 @@ type
     hasProgress: bool
     lex*: Lexer
     tok*: Token
+    fileIndex: int32
 
 proc getTok(p: var Parser) =
   p.tok.reset()
@@ -22,10 +23,23 @@ proc parError(p: var Parser, msg: string) =
 proc getLineInfo(p: Parser): LineInfo =
   result.line = int16(p.tok.line)
   result.col = int16(p.tok.col)
-  result.fileIndex = -1
+  result.fileIndex = p.fileIndex
 
-proc newNode(p: Parser, kind: NodeKind): Node =
-  result = newNodeI(kind, p.getLineInfo)
+proc newNodeP(p: Parser, kind: NodeKind, sons: varargs[Node]): Node =
+  result = newTree(kind, sons)
+  result.lineInfo = sons[0].lineInfo
+
+proc newIdentNodeP(p: Parser): Node =
+  result = newIdentNode(nkIdent, p.tok.val.ident)
+  result.lineInfo = p.getLineInfo
+
+proc newUIntNodeP(p: Parser): Node =
+  result = newIntNode(nkUInt, p.tok.val.iNumber)
+  result.lineInfo = p.getLineInfo
+
+proc newFloatNodeP(p: Parser): Node =
+  result = newFloatNode(nkFloat, p.tok.val.fNumber)
+  result.lineInfo = p.getLineInfo
 
 proc initParser*(inputStream: Stream, identCache: IdentCache): Parser =
   result.tok = initToken()
@@ -45,24 +59,27 @@ proc primary(p: var Parser): Node =
     result = p.parseExpr(-1)
     if p.tok.kind != tkParRi:
       p.parError("unmatched '('")
+    p.getTok()
   of tkEof:
     p.parError("source ended unexpectedly")
   of tkOpr:
-    let a = newIdentNode(nkIdent, p.tok.val.ident)
+    let a = newIdentNodeP(p)
     p.getTok()
     let b = p.primary()
-    result = newTree(nkPrefix, a, b)
+    if b == nil: p.parError("invalid expression")
+    result = newNodeP(p, nkPrefix, a, b)
   of tkNumber:
-    result = newIntNode(nkUInt, p.tok.val.iNumber)
+    result = newUIntNodeP(p)
     p.getTok()
   of tkFloat:
-    result = newFloatNode(nkFloat, p.tok.val.fNumber)
+    result = newFloatNodeP(p)
     p.getTok()
   of tkIdent:
-    result = newIdentNode(nkIdent, p.tok.val.ident)
+    result = newIdentNodeP(p)
     p.getTok()
   else:
-    p.parError("unrecognized token: " & $p.tok.kind)
+    result = nil
+    #p.parError("unrecognized token: " & $p.tok.kind)
 
 proc getPrecedence(tok: Token): int =
   case tok.literal[0]
@@ -88,10 +105,13 @@ proc parseExpr(p: var Parser, minPrec: int): Node =
   while opPrec >= minPrec and p.tok.indent < 0 and isBinary(p.tok):
     let assoc = ord(isLeftAssoc(p.tok))
     opPrec = getPrecedence(p.tok)
-    let opNode = newIdentNode(nkIdent, p.tok.val.ident)
+    let opNode = newIdentNodeP(p)
     p.getTok()
     let rhs = p.parseExpr(opPrec + assoc)
-    result = newTree(nkInfix, opNode, result, rhs)
+    if rhs.isNil:
+      result = newNodeP(p, nkPostfix, opNode, result)
+    else:
+      result = newNodeP(p, nkInfix, opNode, result, rhs)
 
 proc main() =
   var input = newFileStream(paramStr(1))
