@@ -8,9 +8,11 @@ type
     lex*: Lexer
     tok*: Token
     fileIndex: int32
+    emptyNode: Node
 
   MsgKind = enum
     errInvalidIndentation
+    errExprExpected
 
 proc getTok(p: var Parser) =
   p.tok.reset()
@@ -26,6 +28,12 @@ proc parError(p: var Parser, msg: string) =
 proc parError(p: var Parser, msgKind: MsgKind) =
   echo msgKind
   quit(1)
+
+template withInd(p, body: untyped) =
+  let oldInd = p.currInd
+  p.currInd = p.tok.indent
+  body
+  p.currInd = oldInd
 
 template realInd(p): bool = p.tok.indent > p.currInd
 template sameInd(p): bool = p.tok.indent == p.currInd
@@ -46,7 +54,7 @@ proc getLineInfo(p: Parser): LineInfo =
 
 proc newNodeP(p: Parser, kind: NodeKind, sons: varargs[Node]): Node =
   result = newTree(kind, sons)
-  result.lineInfo = sons[0].lineInfo
+  result.lineInfo = if sons.len == 0: p.getLineInfo() else: sons[0].lineInfo
 
 proc newIdentNodeP(p: Parser): Node =
   result = newIdentNode(nkIdent, p.tok.val.ident)
@@ -65,11 +73,21 @@ proc openParser*(inputStream: Stream, identCache: IdentCache): Parser =
   result.lex = openLexer(inputStream, identCache)
   result.getTok() # read the first token
   result.firstTok = true
+  result.emptyNode = newNode(nkEmpty)
 
 proc close*(p: var Parser) =
   p.lex.close()
 
 proc parseExpr(p: var Parser, minPrec: int): Node
+
+proc parseIdentChain(p: var Parser, prev: Node): Node =
+  result = prev
+  while p.tok.kind == tkDot:
+    p.getTok()
+    if p.tok.kind != tkIdent:
+      p.parError("identifier expected")
+    result = newNodeP(p, nkDotCall, result, newIdentNodeP(p))
+    p.getTok()
 
 proc primary(p: var Parser): Node =
   case p.tok.kind:
@@ -85,7 +103,7 @@ proc primary(p: var Parser): Node =
     let a = newIdentNodeP(p)
     p.getTok()
     let b = p.primary()
-    if b == nil: p.parError("invalid expression")
+    if b.kind == nkEmpty: p.parError("invalid expression")
     result = newNodeP(p, nkPrefix, a, b)
   of tkNumber:
     result = newUIntNodeP(p)
@@ -94,29 +112,36 @@ proc primary(p: var Parser): Node =
     result = newFloatNodeP(p)
     p.getTok()
   of tkIdent:
-    result = newIdentNodeP(p)
+    let a = newIdentNodeP(p)
     p.getTok()
-    while p.tok.kind == tkDot:
-      p.getTok()
-      if p.tok.kind != tkIdent:
-        p.parError("identifier expected")
-      result = newNodeP(p, nkDotCall, result, newIdentNodeP(p))
-      p.getTok()
+    if p.tok.kind == tkDot:
+      result = parseIdentChain(p, a)
+    else:
+      result = a
   else:
-    result = nil
+    result = p.emptyNode
     #p.parError("unrecognized token: " & $p.tok.kind)
 
 proc getPrecedence(tok: Token): int =
+  let L = tok.literal.len
+
+  # arrow like?
+  if L > 1 and tok.literal[L-1] == '>' and
+      tok.literal[L-2] in {'-', '~', '='}: return 6
+
+  template considerAsgn(value: untyped) =
+    result = if tok.literal[L-1] == '=': 1 else: value
+
   case tok.literal[0]
-  of '$', '^': result = 10
-  of '*', '%', '/', '\\': result = 9
+  of '$', '^':considerAsgn(10)
+  of '*', '%', '/', '\\': considerAsgn(9)
   of '~': result = 8
-  of '+', '-', '|': result = 8
-  of '&': result = 7
+  of '+', '-', '|': considerAsgn(8)
+  of '&': considerAsgn(7)
   of '=', '<', '>', '!': result = 5
-  of '.': result = 6
+  of '.': considerAsgn(6)
   of '?': result = 2
-  else: result = -1
+  else: considerAsgn(2)
 
 proc isLeftAssoc(tok: Token): bool =
   result = tok.literal[0] != '^'
@@ -133,16 +158,56 @@ proc parseExpr(p: var Parser, minPrec: int): Node =
     let opNode = newIdentNodeP(p)
     p.getTok()
     let rhs = p.parseExpr(opPrec + assoc)
-    if rhs.isNil:
+    if rhs.kind == nkEmpty:
       result = newNodeP(p, nkPostfix, opNode, result)
     else:
       result = newNodeP(p, nkInfix, opNode, result, rhs)
+
+proc parseView(p: var Parser): Node =
+  if p.tok.indent <= p.currInd:
+    return p.emptyNode
+
+  result = newNodeP(p, nkStmtList)
+  withInd(p):
+    while true:
+      if p.tok.indent < p.currInd: break
+      addSon(result, parseExpr(p, -1))
+
+proc parseTopLevel(p: var Parser): Node =
+  case p.tok.kind
+  of tkIdent:
+    let a = newIdentNodeP(p)
+    p.getTok()
+    if p.tok.kind == tkDot:
+      let name = parseIdentChain(p, a)
+      let view = parseView(p)
+      result = newNodeP(p, nkView, name, view)
+    else:
+      let name = a
+      let view = parseView(p)
+      result = newNodeP(p, nkView, name, view)
+  else:
+    p.parError("unknown token")
+
+proc parseAll(p: var Parser): Node =
+  result = newNodeP(p, nkStmtList)
+  while p.tok.kind != tkEof:
+    p.hasProgress = false
+    var a = parseTopLevel(p)
+    if a.kind != nkEmpty and p.hasProgress:
+      addSon(result, a)
+    else:
+      p.parError(errExprExpected)
+      # bugfix: consume a token here to prevent an endless loop:
+      p.getTok()
+    if p.tok.indent != 0:
+      p.parError(errInvalidIndentation)
 
 proc main() =
   var input = newFileStream(paramStr(1))
   var identCache = newIdentCache()
   var p = openParser(input, identCache)
-  var root = p.parseExpr(-1)
+  var root = p.parseAll()
   echo root.treeRepr
   p.close()
 

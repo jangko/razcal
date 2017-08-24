@@ -1,4 +1,4 @@
-import sets, idents, strutils
+import sets, idents, strutils, layout
 
 type
   Scope* = ref object
@@ -16,11 +16,13 @@ type
     lineInfo*: LineInfo
 
   NodeKind* = enum
+    nkEmpty
     nkInfix, nkPrefix, nkPostfix
     nkInt, nkUInt, nkFloat
     nkString, nkIdent, nkSymbol
     nkCall, nkDotCall
     nkStmtList
+    nkView
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object
@@ -33,6 +35,10 @@ type
       strVal*: string
     of nkIdent:
       ident*: Ident
+    of nkView:
+      view*: View
+    of nkSymbol:
+      sym*: Symbol
     else:
       sons*: seq[Node]
     lineInfo*: LineInfo
@@ -85,7 +91,11 @@ proc treeRepr*(n: Node, indent = 0): string =
   const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkIdent}
   let spaces = repeat(' ', indent)
   if n.isNil: return spaces & "nil"
-  result = "$1$2: $3\n" % [spaces, $n.kind, n.val]
+  let val = n.val
+  if val.len == 0:
+    result = "$1$2\n" % [spaces, $n.kind]
+  else:
+    result = "$1$2: $3\n" % [spaces, $n.kind, n.val]
   if n.kind notin NodeWithVal and not n.sons.isNil:
     for s in n.sons:
       result.add treeRepr(s, indent + 2)
