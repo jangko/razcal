@@ -52,6 +52,8 @@ proc newIdentCache*(): IdentCache =
   result.idAnon = result.getIdent":anonymous"
   result.wordCounter = 1
   result.emptyIdent = result.getIdent("")
+
   # initialize the keywords:
-  for s in countup(succ(low(specialWords)), high(specialWords)):
-    result.getIdent(specialWords[s], hash(specialWords[s])).id = ord(s)
+  for s in countup(succ(low(SpecialWords)), high(SpecialWords)):
+    let idx = ord(s)
+    result.getIdent(specialWords[idx-1], hash(specialWords[idx-1])).id = idx

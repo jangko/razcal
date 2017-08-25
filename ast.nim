@@ -19,24 +19,26 @@ type
     nkEmpty
     nkInfix, nkPrefix, nkPostfix
     nkInt, nkUInt, nkFloat
-    nkString, nkIdent, nkSymbol
+    nkString, nkCharLit, nkIdent, nkSymbol
     nkCall, nkDotCall
-    nkStmtList
-    nkView
+    nkStmtList, nkClassParams
+    nkView, nkClass, nkStyle
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object
     case kind*: NodeKind
-    of nkInt, nkUInt:
-      intVal*: BiggestUInt
+    of nkInt:
+      intVal*: BiggestInt
+    of nkUInt:
+      uintVal*: BiggestUInt
     of nkFloat:
       floatVal*: BiggestFloat
     of nkString:
       strVal*: string
+    of nkCharLit:
+      charLit*: string
     of nkIdent:
       ident*: Ident
-    of nkView:
-      view*: View
     of nkSymbol:
       sym*: Symbol
     else:
@@ -50,17 +52,25 @@ proc newNode*(kind: NodeKind): Node =
   result.lineInfo.col = -1
   result.lineInfo.fileIndex = -1
 
-proc newIntNode*(kind: NodeKind, intVal: BiggestUInt): Node =
+proc newIntNode*(kind: NodeKind, intVal: BiggestInt): Node =
   result = newNode(kind)
   result.intVal = intVal
+
+proc newUIntNode*(kind: NodeKind, uintVal: BiggestUInt): Node =
+  result = newNode(kind)
+  result.uintVal = uintVal
 
 proc newFloatNode*(kind: NodeKind, floatVal: BiggestFloat): Node =
   result = newNode(kind)
   result.floatVal = floatVal
 
-proc newStrNode*(kind: NodeKind, strVal: string): Node =
+proc newStringNode*(kind: NodeKind, strVal: string): Node =
   result = newNode(kind)
   result.strVal = strVal
+
+proc newCharLitNode*(kind: NodeKind, charLit: string): Node =
+  result = newNode(kind)
+  result.charLit = charLit
 
 proc newIdentNode*(kind: NodeKind, ident: Ident): Node =
   result = newNode(kind)
@@ -81,14 +91,20 @@ proc addSon*(father, son: Node) =
 
 proc val*(n: Node): string =
   case n.kind
-  of nkInt, nkUInt: result = $n.intVal
+  of nkInt: result = $n.intVal
+  of nkUInt: result = $n.uintVal
   of nkFloat: result = $n.floatVal
   of nkString: result = n.strVal
+  of nkCharLit:
+    result = "0x"
+    for c in n.charLit:
+      result.add(toHex(ord(c), 2))
   of nkIdent: result = $n.ident
+  of nkSymbol: result = $n.sym.name
   else: result = ""
 
 proc treeRepr*(n: Node, indent = 0): string =
-  const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkIdent}
+  const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkCharLit, nkIdent, nkSymbol}
   let spaces = repeat(' ', indent)
   if n.isNil: return spaces & "nil"
   let val = n.val

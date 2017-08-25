@@ -1,4 +1,4 @@
-import lexbase, strutils, streams, idents
+import lexbase, strutils, streams, idents, keywords
 
 type
   Lexer* = object of BaseLexer
@@ -12,6 +12,7 @@ type
     tkString, tkCharLit, tkColon, tkColonColon, tkSemiColon, tkAccent
     tkComma, tkDot, tkDotDot, tkOpr
     tkParLe, tkParRi, tkCurlyLe, tkCurlyRi, tkBracketLe, tkBracketRi
+    tkProgram, tkStyle
 
   TokenVal* = object {.union.}
     iNumber*: uint64
@@ -211,6 +212,9 @@ proc stateIdentifier(lex: var Lexer, tok: var Token): bool =
     lex.advance
   tok.literal = lex.tokenLit
   tok.val.ident = lex.identCache.getIdent(tok.literal)
+  if tok.val.ident.id > 0:
+    let id = tok.val.ident.id - ord(wProgram)
+    tok.kind = TokenKind(id + ord(tkProgram))
   lex.nextState = stateOuterScope
   result = true
 

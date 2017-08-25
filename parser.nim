@@ -13,6 +13,8 @@ type
   MsgKind = enum
     errInvalidIndentation
     errExprExpected
+    errIdentExpected
+    errTokenExpected
 
 proc getTok(p: var Parser) =
   p.tok.reset()
@@ -43,9 +45,15 @@ proc optPar(p: var Parser) =
   if p.tok.indent >= 0:
     if p.tok.indent < p.currInd: parError(p, errInvalidIndentation)
 
-proc optInd(p: var Parser, n: Node) =
+proc optInd(p: var Parser) =
   if p.tok.indent >= 0:
     if not realInd(p): parError(p, errInvalidIndentation)
+
+proc eat(p: var Parser, kind: TokenKind) =
+  if p.tok.kind == kind:
+    p.getTok()
+  else:
+    p.parError(errTokenExpected)
 
 proc getLineInfo(p: Parser): LineInfo =
   result.line = int16(p.tok.line)
@@ -61,11 +69,19 @@ proc newIdentNodeP(p: Parser): Node =
   result.lineInfo = p.getLineInfo
 
 proc newUIntNodeP(p: Parser): Node =
-  result = newIntNode(nkUInt, p.tok.val.iNumber)
+  result = newUIntNode(nkUInt, p.tok.val.iNumber)
   result.lineInfo = p.getLineInfo
 
 proc newFloatNodeP(p: Parser): Node =
   result = newFloatNode(nkFloat, p.tok.val.fNumber)
+  result.lineInfo = p.getLineInfo
+
+proc newStringNodeP(p: Parser): Node =
+  result = newStringNode(nkString, p.tok.literal)
+  result.lineInfo = p.getLineInfo
+
+proc newCharLitNodeP(p: Parser): Node =
+  result = newCharLitNode(nkCharLit, p.tok.literal)
   result.lineInfo = p.getLineInfo
 
 proc openParser*(inputStream: Stream, identCache: IdentCache): Parser =
@@ -85,7 +101,7 @@ proc parseIdentChain(p: var Parser, prev: Node): Node =
   while p.tok.kind == tkDot:
     p.getTok()
     if p.tok.kind != tkIdent:
-      p.parError("identifier expected")
+      p.parError(errIdentExpected)
     result = newNodeP(p, nkDotCall, result, newIdentNodeP(p))
     p.getTok()
 
@@ -118,6 +134,12 @@ proc primary(p: var Parser): Node =
       result = parseIdentChain(p, a)
     else:
       result = a
+  of tkString:
+    result = newStringNodeP(p)
+    p.getTok()
+  of tkCharLit:
+    result = newCharLitNodeP(p)
+    p.getTok()
   else:
     result = p.emptyNode
     #p.parError("unrecognized token: " & $p.tok.kind)
@@ -163,7 +185,7 @@ proc parseExpr(p: var Parser, minPrec: int): Node =
     else:
       result = newNodeP(p, nkInfix, opNode, result, rhs)
 
-proc parseView(p: var Parser): Node =
+proc parseViewBody(p: var Parser): Node =
   if p.tok.indent <= p.currInd:
     return p.emptyNode
 
@@ -173,19 +195,50 @@ proc parseView(p: var Parser): Node =
       if p.tok.indent < p.currInd: break
       addSon(result, parseExpr(p, -1))
 
+proc parseView(p: var Parser): Node =
+  var name = newIdentNodeP(p)
+
+  p.getTok()
+  if p.tok.kind == tkDot:
+    name = parseIdentChain(p, name)
+
+  let body = parseViewBody(p)
+  result = newNodeP(p, nkView, name, body)
+
+proc parseClassParams(p: var Parser): Node =
+  p.getTok()
+  p.optInd()
+  result = newNodeP(p, nkClassParams)
+  while true:
+    addSon(result, parseExpr(p, -1))
+    if p.tok.kind == tkParRi: break
+    if p.tok.kind notin {tkComma, tkSemiColon}: break
+    p.getTok()
+  p.optPar()
+  eat(p, tkParRi)
+
+proc parseClass(p: var Parser): Node =
+  p.getTok()
+  if p.tok.kind != tkIdent:
+    p.parError(errIdentExpected)
+
+  let name = newIdentNodeP(p)
+  var params = p.emptyNode
+  p.getTok()
+  if p.tok.kind == tkParLe:
+    params = parseClassParams(p)
+
+  let body = parseViewBody(p)
+  result = newNodeP(p, nkClass, name, params, body)
+
+proc parseStyle(p: var Parser): Node =
+  p.getTok()
+
 proc parseTopLevel(p: var Parser): Node =
   case p.tok.kind
-  of tkIdent:
-    let a = newIdentNodeP(p)
-    p.getTok()
-    if p.tok.kind == tkDot:
-      let name = parseIdentChain(p, a)
-      let view = parseView(p)
-      result = newNodeP(p, nkView, name, view)
-    else:
-      let name = a
-      let view = parseView(p)
-      result = newNodeP(p, nkView, name, view)
+  of tkIdent: result = parseView(p)
+  of tkColonColon: result = parseClass(p)
+  of tkStyle: result = parseStyle(p)
   else:
     p.parError("unknown token")
 
