@@ -45,6 +45,7 @@ type
     errTokenExpected
     errSourceEndedUnexpectedly
     errInvalidExpresion
+    errOnlyAsgnAllowed
 
     errUnknownNode
     errCannotOpenFile
@@ -73,6 +74,7 @@ const
     errTokenExpected: "token expected: $1",
     errSourceEndedUnexpectedly: "source ended unexpectedly",
     errInvalidExpresion: "invalid expression",
+    errOnlyAsgnAllowed: "only assignment allowed here",
 
     errUnknownNode: "unknown node $1",
     errCannotOpenFile: "cannot open file: $1",
@@ -89,11 +91,39 @@ proc newContext*(): Context =
 proc getIdent*(ctx: Context, ident: string): Ident {.inline.} =
   result = ctx.identCache.getIdent(ident)
 
+proc marker(err: SourceError): string =
+  if err.lineContent.len <= 80:
+    return err.lineContent & spaces(err.column) & "^"
+
+  var start = err.column - 40
+  var stop = err.column + 40
+  var trimStart = false
+  var trimStop = false
+  if start < 0:
+    start = 0
+    trimStart = true
+  if stop > 80:
+    stop = 80
+    trimStop = true
+
+  result = err.lineContent.substr(start, stop)
+  if trimStart:
+    var i = 0
+    while i < 3 and i < result.len:
+      result[i] = '.'
+      inc i
+
+  if trimStop:
+    var i = result.len - 1
+    while i > result.len - 4 and i > 0:
+      result[i] = '.'
+      dec i
+
 proc printError*(ctx: Context, err: SourceError) =
   assert(err.fileIndex >= 0 and err.fileIndex < ctx.fileInfos.len)
   let info = ctx.fileInfos[err.fileIndex]
   let msg = "$1($2,$3) Error: $4" % [info.fileName, $err.line, $(err.column + 1), err.msg]
-  echo err.lineContent & spaces(err.column) & "^"
+  echo err.marker()
   echo msg
 
 proc printError*(ctx: Context, err: InternalError) =
@@ -141,6 +171,6 @@ proc toFileName*(ctx: Context, info: LineInfo): string =
 proc toFullPath*(ctx: Context, info: LineInfo): string =
   assert(info.fileIndex >= 0 and info.fileIndex < ctx.fileInfos.len)
   result = ctx.fileInfos[info.fileIndex].fullPath
-  
+
 proc toString*(ctx: Context, info: LineInfo): string =
   result = "$1($2:$3)" % [ctx.toFileName(info), $info.line, $(info.col+1)]

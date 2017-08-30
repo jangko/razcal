@@ -1,4 +1,4 @@
-import lexer, lexbase, idents, streams, os, ast, semcheck, context
+import lexer, lexbase, idents, streams, os, ast, semcheck, context, keywords
 
 type
   Parser* = object
@@ -88,7 +88,7 @@ proc openParser*(inputStream: Stream, context: Context, fileIndex: int32): Parse
 proc close*(p: var Parser) =
   p.lex.close()
 
-proc parseExpr(p: var Parser, minPrec: int): Node
+proc parseExpr(p: var Parser, minPrec: int, prev = Node(nil)): Node
 
 proc parseIdentChain(p: var Parser, prev: Node): Node =
   result = prev
@@ -164,9 +164,9 @@ proc isLeftAssoc(tok: Token): bool =
 proc isBinary(tok: Token): bool =
   result = tok.kind in {tkOpr, tkDotDot}
 
-proc parseExpr(p: var Parser, minPrec: int): Node =
+proc parseExpr(p: var Parser, minPrec: int, prev = Node(nil)): Node =
   # this is operator precedence parsing algorithm
-  result = p.primary()
+  result = if prev.isNil: p.primary() else: prev
   var opPrec = getPrecedence(p.tok)
   while opPrec >= minPrec and p.tok.indent < 0 and isBinary(p.tok):
     let assoc = ord(isLeftAssoc(p.tok))
@@ -178,6 +178,41 @@ proc parseExpr(p: var Parser, minPrec: int): Node =
       result = newNodeP(p, nkPostfix, opNode, result)
     else:
       result = newNodeP(p, nkInfix, opNode, result, rhs)
+
+proc parseViewClassArgs(p: var Parser): Node =
+  p.getTok()
+  p.optInd()
+  result = newNodeP(p, nkViewClassArgs)
+  while true:
+    addSon(result, parseExpr(p, -1))
+    if p.tok.kind == tkParRi: break
+    if p.tok.kind notin {tkComma, tkSemiColon}: break
+    p.getTok()
+  p.optPar()
+  eat(p, tkParRi)
+
+proc parseViewClass(p: var Parser): Node =
+  if p.tok.kind != tkColonColon:
+    return p.emptyNode
+
+  p.getTok()
+  if p.tok.kind != tkIdent:
+    p.error(errIdentExpected)
+  let name = newIdentNodeP(p)
+
+  var args = p.emptyNode
+  p.getTok()
+  if p.tok.kind == tkParLe and p.tok.indent < 0:
+    args = parseViewClassArgs(p)
+
+  result = newNodeP(p, nkViewClass, name, args)
+
+proc parseViewClassList(p: var Parser): Node =
+  result = newNodeP(p, nkViewClassList)
+  while true:
+    let viewClass = parseViewClass(p)
+    if viewClass.kind == nkEmpty: break
+    addSon(result, viewClass)
 
 proc parseViewBody(p: var Parser): Node =
   if p.tok.indent <= p.currInd:
@@ -196,18 +231,43 @@ proc parseView(p: var Parser): Node =
   if p.tok.kind == tkDot:
     name = parseIdentChain(p, name)
 
-  let body = parseViewBody(p)
-  result = newNodeP(p, nkView, name, body)
+  let viewClasses = parseViewClassList(p)
+  let viewBody = parseViewBody(p)
+
+  result = newNodeP(p, nkView, name, viewClasses, viewBody)
+
+proc parseClassParam(p: var Parser): Node =
+  if p.tok.kind != tkIdent:
+    p.error(errIdentExpected)
+
+  let lhs = newIdentNodeP(p)
+  p.getTok()
+  if p.tok.kind in {tkSemiColon, tkParRi}:
+    return lhs
+
+  if p.tok.indent >= 0: p.error(errInvalidIndentation)
+  if not(p.tok.kind == tkOpr and p.tok.val.ident.id == ord(wEquals)):
+    p.error(errOnlyAsgnAllowed)
+
+  p.getTok()
+  let rhs = parseExpr(p, -1)
+  if rhs.kind == nkEmpty: result = lhs
+  else: result = newNodeP(p, nkAsgn, lhs, rhs)
 
 proc parseClassParams(p: var Parser): Node =
   p.getTok()
   p.optInd()
-  result = newNodeP(p, nkClassParams)
-  while true:
-    addSon(result, parseExpr(p, -1))
-    if p.tok.kind == tkParRi: break
-    if p.tok.kind notin {tkComma, tkSemiColon}: break
-    p.getTok()
+
+  if p.tok.kind == tkIdent:
+    result = newNodeP(p, nkClassParams)
+    while true:
+      addSon(result, parseClassParam(p))
+      if p.tok.kind == tkParRi: break
+      if p.tok.kind notin {tkComma, tkSemiColon}: break
+      p.getTok()
+  else:
+    result = p.emptyNode
+
   p.optPar()
   eat(p, tkParRi)
 
@@ -240,7 +300,7 @@ proc parseAll(p: var Parser): Node =
   result = newNodeP(p, nkStmtList)
   while p.tok.kind != tkEof:
     p.hasProgress = false
-    var a = parseTopLevel(p)
+    let a = parseTopLevel(p)
     if a.kind != nkEmpty and p.hasProgress:
       addSon(result, a)
     else:

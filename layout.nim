@@ -4,11 +4,13 @@ type
   View* = ref object
     top*, left*, right*, bottom*: kiwi.Variable
     width*, height*: kiwi.Variable
-    views*: Table[string, View]
-    parent*: View
-    name*: string
+    views*: Table[string, View]  # map string to children view
+    children*: seq[View]         # children view
+    parent*: View                # nil if no parent/root
+    name*: string                # view's name
+    idx*: int                    # index into children position/-1 if invalid
 
-  ViewClass* = ref object
+  Class* = ref object
 
 proc newView*(name: string): View =
   new(result)
@@ -21,14 +23,23 @@ proc newView*(name: string): View =
   result.parent = nil
   result.views = initTable[string, View]()
   result.name = name
+  result.children = @[]
+  result.idx = -1
 
-proc setConstraint*(solver: Solver, view: View) =
+proc newView*(parent: View, name: string): View =
+  assert(parent != nil)
+  result = newView(name)
+  result.idx = parent.children.len
+  parent.views[name] = result
+  parent.children.add result
+  result.parent = parent
+
+proc setBasicConstraint*(solver: Solver, view: View) =
   solver.addConstraint(view.right == view.left + view.width)
   solver.addConstraint(view.bottom == view.top + view.height)
   solver.addConstraint(view.right >= view.left)
   solver.addConstraint(view.bottom >= view.top)
   solver.addConstraint(view.width == view.height)
-  solver.addConstraint(view.width == 30)
 
 proc print*(view: View) =
   echo view.top

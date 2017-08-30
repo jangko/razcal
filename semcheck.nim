@@ -4,6 +4,7 @@ type
   Layout* = ref object of IDobj
     root*: View
     views*: Table[View, Node]
+    classes*: Table[string, Node]
     solver*: kiwi.Solver
     context: Context
     lastParent*: View      # last processed parent view
@@ -54,14 +55,11 @@ proc sourceError(lay: Layout, kind: MsgKind, n: Node, args: varargs[string, `$`]
   raise err
 
 proc createView(lay: Layout, n: Node): Node =
-  var view = newView(n.ident.s)
-  var sym  = newSymbol(skView, n)
-  lay.lastParent.views[n.ident.s] = view
-  view.parent = lay.lastParent
+  var view = lay.lastParent.newView(n.ident.s)
+  result   = newViewSymbol(skView, n, view).newSymbolNode()
   lay.lastParent = view
-  sym.view = view
-  result = newSymbolNode(sym)
   lay.views[view] = result
+  lay.solver.setBasicConstraint(view)
 
 proc semViewName(lay: Layout, n: Node, lastIdent: Node): Node =
   case n.kind
@@ -87,25 +85,34 @@ proc semViewName(lay: Layout, n: Node, lastIdent: Node): Node =
   else:
     internalError(lay, errUnknownNode, n.kind)
 
+proc semViewClass(lay: Layout, n: Node): Node =
+  result = n
+
 proc semViewBody(lay: Layout, n: Node): Node =
   result = n
 
+proc semView(lay: Layout, n: Node) =
+  assert(n.sons.len == 3)
+  # each time we create new view
+  # need to reset the lastParent
+  lay.lastParent = lay.root
+  var lastIdent = Node(nil)
+  if n.sons[0].kind == nkIdent: lastIdent = n.sons[0]
+  if lastIdent.isNil and n.sons[0].kind == nkDotCall:
+    let son = n.sons[0].sons[1]
+    if son.kind == nkIdent: lastIdent = son
+  n.sons[0] = lay.semViewName(n.sons[0], lastIdent)
+  n.sons[1] = lay.semViewClass(n.sons[1])
+  n.sons[2] = lay.semViewBody(n.sons[2])
+
+proc semClass(lay: Layout, n: Node) =
+  assert(n.sons.len == 3)
+  echo n.treeRepr
+
 proc semStmt(lay: Layout, n: Node) =
   case n.kind
-  of nkView:
-    assert(n.sons.len == 2)
-    # each time we create new view
-    # need to reset the lastParent
-    lay.lastParent = lay.root
-    var lastIdent = Node(nil)
-    if n.sons[0].kind == nkIdent: lastIdent = n.sons[0]
-    if lastIdent.isNil and n.sons[0].kind == nkDotCall:
-      let son = n.sons[0].sons[1]
-      if son.kind == nkIdent: lastIdent = son
-    n.sons[0] = lay.semViewName(n.sons[0], lastIdent)
-    n.sons[1] = lay.semViewBody(n.sons[1])
-  of nkClass:
-    discard
+  of nkView: lay.semView(n)
+  of nkClass: lay.semClass(n)
   else:
     internalError(lay, errUnknownNode, n.kind)
 

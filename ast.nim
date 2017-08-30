@@ -7,13 +7,15 @@ type
     parent*: Scope
 
   SymKind* = enum
-    skUnknown, skView, skClass, skConst, skStyle
+    skUnknown, skView, skClass, skConst, skStyle, skParam
 
   Symbol* = ref SymbolObj
   SymbolObj* {.acyclic.} = object of IDobj
     case kind*: SymKind
     of skView:
       view*: View
+    of skClass:
+      class*: Class
     else: nil
     name*: Ident
     lineInfo*: LineInfo
@@ -23,9 +25,9 @@ type
     nkInfix, nkPrefix, nkPostfix
     nkInt, nkUInt, nkFloat
     nkString, nkCharLit, nkIdent, nkSymbol
-    nkCall, nkDotCall
-    nkStmtList, nkClassParams
-    nkView, nkClass, nkStyle
+    nkCall, nkDotCall, nkAsgn
+    nkStmtList, nkClassParams, nkViewClassList
+    nkView, nkClass, nkViewClass, nkViewClassArgs, nkStyle
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object
@@ -130,7 +132,27 @@ proc newSymbol*(kind: SymKind, n: Node): Symbol =
   result.kind = kind
   result.name = n.ident
   result.lineInfo = n.lineInfo
-  
+
+proc newViewSymbol*(kind: SymKind, n: Node, view: View): Symbol =
+  assert(n.kind == nkIdent)
+  new(result)
+  result.kind = kind
+  result.name = n.ident
+  result.lineInfo = n.lineInfo
+  result.view = view
+
 proc getSymString*(n: Node): string {.inline.} =
   assert(n.kind == nkSymbol)
   result = n.sym.name.s
+
+proc newScope*(): Scope =
+  new(result)
+  result.depthLevel = 0
+  result.symbols = initSet[Symbol]()
+  result.parent = nil
+
+proc newScope*(parent: Scope): Scope =
+  new(result)
+  result.depthLevel = parent.depthLevel + 1
+  result.symbols = initSet[Symbol]()
+  result.parent = parent
