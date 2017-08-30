@@ -1,4 +1,4 @@
-import ast, layout, idents, kiwi, tables
+import ast, layout, idents, kiwi, tables, context
 
 type
   Layout* = ref object of IDobj
@@ -6,9 +6,9 @@ type
     width*, height*: kiwi.Variable
     views*: Table[string, Symbol]
     solver*: kiwi.Solver
-    identCache: IdentCache
-    
-proc newLayout*(id: int, identCache: IdentCache): Layout =
+    context: Context
+
+proc newLayout*(id: int, context: Context): Layout =
   new(result)
   let name = "layout" & $id
   result.id = id
@@ -20,7 +20,7 @@ proc newLayout*(id: int, identCache: IdentCache): Layout =
   result.height = newVariable(name & ".height")
   result.views = initTable[string, Symbol]()
   result.solver = newSolver()
-  result.identCache = identCache
+  result.context = context
 
 proc semCheck*(lay: Layout, n: Node) =
   echo n.treeRepr

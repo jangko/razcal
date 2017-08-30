@@ -2,9 +2,10 @@ import lexbase, strutils, streams, idents, keywords, context
 
 type
   Lexer* = object of BaseLexer
-    identCache: IdentCache
+    context*: Context
     nextState: LexerState
     tokenStartPos: int
+    fileIndex*: int32
     c: char
 
   TokenKind* = enum
@@ -56,11 +57,12 @@ proc stateCharLit(lex: var Lexer, tok: var Token): bool
 proc stateOperator(lex: var Lexer, tok: var Token): bool
 {.pop.}
 
-proc openLexer*(stream: Stream, identCache: IdentCache): Lexer =
+proc openLexer*(stream: Stream, context: Context, fileIndex: int32): Lexer =
+  result.fileIndex = fileIndex
   result.open(stream)
   result.nextState = stateOuterScope
   result.c = result.buf[result.bufpos]
-  result.identCache = identCache
+  result.context = context
 
 proc advance(lex: var Lexer, step = 1) =
   lex.bufpos.inc(step)
@@ -79,11 +81,14 @@ proc tokenLit(lex: Lexer): string =
 proc getToken*(lex: var Lexer, tok: var Token) =
   while not lex.nextState(lex, tok): discard
 
-proc lexError(lex: Lexer, message: string): ref SourceError {.raises: [].} =
-  result = newException(SourceError, message)
-  result.line = lex.lineNumber
-  result.column = lex.getColNumber(lex.bufpos)
-  result.lineContent = lex.getCurrentLine
+proc error(lex: Lexer, kind: MsgKind, args: varargs[string, `$`]) =
+  var err = new(SourceError)
+  err.msg = lex.context.msgKindToString(kind, args)
+  err.line = lex.lineNumber
+  err.column = lex.getColNumber(lex.bufpos)
+  err.lineContent = lex.getCurrentLine(false)
+  err.fileIndex = lex.fileIndex
+  raise err
 
 proc lexCR(lex: var Lexer) =
   lex.bufpos = lex.handleCR(lex.bufpos)
@@ -139,7 +144,7 @@ proc stateOuterScope(lex: var Lexer, tok: var Token): bool =
       lex.nextState = stateLineComment
     return false
   of '\t':
-    raise lexError(lex, "tabs are not allowed")
+    lex.error(errTabsAreNotAllowed)
   of '\c':
     lex.lexCR
     return false
@@ -166,7 +171,7 @@ proc stateOuterScope(lex: var Lexer, tok: var Token): bool =
   of ',': singleToken(tkComma)
   else:
     if lex.c in OpChars: tokenNextstate(tkOpr, stateOperator)
-    else: raise lexError(lex, "unexpected token: '" & $lex.c & "'")
+    else: lex.error(errInvalidToken, lex.c)
 
   result = true
 
@@ -198,7 +203,7 @@ proc stateNestedComment(lex: var Lexer, tok: var Token): bool =
           return true
       lex.advance
     of EndOfFile:
-      raise lexError(lex, "unexpected end of file in multi line comment")
+      lex.error(errUnexpectedEOLinMultiLineComment)
     else:
       lex.advance
 
@@ -207,8 +212,8 @@ proc stateIdentifier(lex: var Lexer, tok: var Token): bool =
   while lex.c in IdentChars:
     lex.advance
   tok.literal = lex.tokenLit
-  tok.val.ident = lex.identCache.getIdent(tok.literal)
-  if tok.val.ident.id > 0:
+  tok.val.ident = lex.context.getIdent(tok.literal)
+  if tok.val.ident.id > 0 and tok.val.ident.id < ord(wEquals):
     let id = tok.val.ident.id - ord(wProgram)
     tok.kind = TokenKind(id + ord(tkProgram))
   lex.nextState = stateOuterScope
@@ -228,7 +233,7 @@ proc parseBoundedInt(lex: var Lexer, val: string, base: int, maxVal: uint64, sta
     let c  = uint64(charToInt(val[i]))
     let ov = maxVal - result
     if c > ov:
-      raise lexError(lex, "number overflow")
+      lex.error(errNumberOverflow)
     else: result += c
 
 proc stateNumber(lex: var Lexer, tok: var Token): bool =
@@ -245,14 +250,14 @@ proc stateNumber(lex: var Lexer, tok: var Token): bool =
     while true:
       while lex.c in wideRange:
         if lex.c notin validRange:
-          raise lexError(lex, "invalid number range: " & $lex.c)
+          lex.error(errInvalidNumberRange, lex.c)
         tok.literal.add lex.c
         lex.advance
 
       if lex.c == '_':
         lex.advance
         if lex.c notin wideRange:
-          raise lexError(lex, "invalid token '_'")
+          lex.error(errInvalidToken, "_")
 
       if lex.c notin wideRange:
         break
@@ -317,7 +322,7 @@ proc stateNumber(lex: var Lexer, tok: var Token): bool =
   of OctalNumber: tok.val.iNumber = lex.parseBoundedInt(tok.literal, 8, maxVal, 2)
   of BinaryNumber: tok.val.iNumber = lex.parseBoundedInt(tok.literal, 2, maxVal, 2)
   of FloatNumber: tok.val.fNumber = parseFloat(tok.literal)
-  else: raise lexError(lex, "unknown number type")
+  else: lex.error(errUnknownNumberType)
 
   lex.nextState = stateOuterScope
   result = true
@@ -376,7 +381,7 @@ proc getEscapedChar(lex: var Lexer, tok: var Token) =
     var xi = 0
     lex.handleDecChars(xi)
     if (xi <= 255): add(tok.literal, chr(xi))
-    else: raise lexError(lex, "invalid character constant")
+    else: lex.error(errInvalidCharacterConstant, lex.c)
   of 'x', 'X', 'u', 'U':
     let tp = lex.c
     lex.advance
@@ -401,14 +406,14 @@ proc getEscapedChar(lex: var Lexer, tok: var Token) =
     else:
       add(tok.literal, chr(xi))
   else:
-    raise lexError(lex, "wrong escape character in string '" & $lex.c & "'")
+    lex.error(errWrongEscapeChar, lex.c)
 
 proc stateString(lex: var Lexer, tok: var Token): bool =
   lex.advance
   while true:
     case lex.c
     of LineEnd:
-      raise lexError(lex, "closing quote expected")
+      lex.error(errClosingQuoteExpected)
     of '\\':
       lex.getEscapedChar(tok)
     of '"':
@@ -425,7 +430,7 @@ proc stateCharLit(lex: var Lexer, tok: var Token): bool =
   lex.advance
   case lex.c
   of '\0'..pred(' '), '\'':
-    raise lexError(lex, "invalid character constant '0x" & toHex(ord(lex.c), 2) & "'")
+    lex.error(errInvalidCharacterConstant, toHex(ord(lex.c), 2))
   of '\\':
     lex.getEscapedChar(tok)
   else:
@@ -433,7 +438,7 @@ proc stateCharLit(lex: var Lexer, tok: var Token): bool =
     lex.advance
 
   if lex.c != '\'':
-    raise lexError(lex, "missing final quote")
+    lex.error(errMissingFinalQuote)
 
   lex.advance
   lex.nextState = stateOuterScope
@@ -443,7 +448,7 @@ proc stateOperator(lex: var Lexer, tok: var Token): bool =
   while lex.c in OpChars:
     tok.literal.add lex.c
     lex.advance
-  tok.val.ident = lex.identCache.getIdent(tok.literal)
+  tok.val.ident = lex.context.getIdent(tok.literal)
   lex.nextState = stateOuterScope
   result = true
 

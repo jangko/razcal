@@ -3,8 +3,13 @@ type
     wInvalid
     wProgram
     wStyle
+    wConst
+
+    wEquals
 
 const
   specialWords* = [
-    "program", "style"
+    "program", "style", "const",
+
+    "="
   ]

@@ -44,7 +44,7 @@ proc getIdent*(self: IdentCache; ident: string, h: Hash): Ident =
   else:
     result.id = id
 
-proc getIdent*(self: IdentCache; ident: string): Ident =
+proc getIdent*(self: IdentCache; ident: string): Ident {.inline.} =
   result = self.getIdent(ident, hash(ident))
 
 proc newIdentCache*(): IdentCache =

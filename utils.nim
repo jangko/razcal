@@ -1,4 +1,4 @@
-import os
+import os, strutils
 
 proc canonicalizePath*(path: string): string =
   # on Windows, 'expandFilename' calls getFullPathName which doesn't do
@@ -10,17 +10,14 @@ proc canonicalizePath*(path: string): string =
       return x
   else:
     result = path.expandFilename
-#[
-proc shortenDir*(dir: string): string =
-  ## returns the interesting part of a dir
-  var prefix = gProjectPath & DirSep
-  if startsWith(dir, prefix):
-    return substr(dir, len(prefix))
-  prefix = getPrefixDir() & DirSep
+
+proc shortenDir*(projectPath, dir: string): string =
+  # returns the interesting part of a dir
+  var prefix = projectPath & DirSep
   if startsWith(dir, prefix):
     return substr(dir, len(prefix))
   result = dir
-]#
+
 proc removeTrailingDirSep*(path: string): string =
   if (len(path) > 0) and (path[len(path) - 1] == DirSep):
     result = substr(path, 0, len(path) - 2)

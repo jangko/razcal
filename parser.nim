@@ -7,7 +7,6 @@ type
     hasProgress: bool
     lex*: Lexer
     tok*: Token
-    fileIndex: int32
     emptyNode: Node
 
 proc getTok(p: var Parser) =
@@ -17,13 +16,14 @@ proc getTok(p: var Parser) =
     p.lex.getToken(p.tok)
   p.hasProgress = true
 
-proc parError(p: var Parser, msg: string) =
-  echo msg
-  quit(1)
-
-proc parError(p: var Parser, msgKind: MsgKind) =
-  echo msgKind
-  quit(1)
+proc error(p: Parser, kind: MsgKind, args: varargs[string, `$`]) =
+  var err = new(SourceError)
+  err.msg = p.lex.context.msgKindToString(kind, args)
+  err.line = p.tok.line
+  err.column = p.tok.col
+  err.lineContent = p.lex.getCurrentLine(false)
+  err.fileIndex = p.lex.fileIndex
+  raise err
 
 template withInd(p, body: untyped) =
   let oldInd = p.currInd
@@ -37,22 +37,22 @@ template sameOrNoInd(p): bool = p.tok.indent == p.currInd or p.tok.indent < 0
 
 proc optPar(p: var Parser) =
   if p.tok.indent >= 0:
-    if p.tok.indent < p.currInd: parError(p, errInvalidIndentation)
+    if p.tok.indent < p.currInd: p.error(errInvalidIndentation)
 
 proc optInd(p: var Parser) =
   if p.tok.indent >= 0:
-    if not realInd(p): parError(p, errInvalidIndentation)
+    if not realInd(p): p.error(errInvalidIndentation)
 
 proc eat(p: var Parser, kind: TokenKind) =
   if p.tok.kind == kind:
     p.getTok()
   else:
-    p.parError(errTokenExpected)
+    p.error(errTokenExpected, kind)
 
 proc getLineInfo(p: Parser): LineInfo =
   result.line = int16(p.tok.line)
   result.col = int16(p.tok.col)
-  result.fileIndex = p.fileIndex
+  result.fileIndex = p.lex.fileIndex
 
 proc newNodeP(p: Parser, kind: NodeKind, sons: varargs[Node]): Node =
   result = newTree(kind, sons)
@@ -78,9 +78,9 @@ proc newCharLitNodeP(p: Parser): Node =
   result = newCharLitNode(nkCharLit, p.tok.literal)
   result.lineInfo = p.getLineInfo
 
-proc openParser*(inputStream: Stream, identCache: IdentCache): Parser =
+proc openParser*(inputStream: Stream, context: Context, fileIndex: int32): Parser =
   result.tok = initToken()
-  result.lex = openLexer(inputStream, identCache)
+  result.lex = openLexer(inputStream, context, fileIndex)
   result.getTok() # read the first token
   result.firstTok = true
   result.emptyNode = newNode(nkEmpty)
@@ -95,7 +95,7 @@ proc parseIdentChain(p: var Parser, prev: Node): Node =
   while p.tok.kind == tkDot:
     p.getTok()
     if p.tok.kind != tkIdent:
-      p.parError(errIdentExpected)
+      p.error(errIdentExpected)
     result = newNodeP(p, nkDotCall, result, newIdentNodeP(p))
     p.getTok()
 
@@ -105,15 +105,15 @@ proc primary(p: var Parser): Node =
     p.getTok()
     result = p.parseExpr(-1)
     if p.tok.kind != tkParRi:
-      p.parError("unmatched '('")
+      p.error(errClosingParExpected)
     p.getTok()
   of tkEof:
-    p.parError("source ended unexpectedly")
+    p.error(errSourceEndedUnexpectedly)
   of tkOpr:
     let a = newIdentNodeP(p)
     p.getTok()
     let b = p.primary()
-    if b.kind == nkEmpty: p.parError("invalid expression")
+    if b.kind == nkEmpty: p.error(errInvalidExpresion)
     result = newNodeP(p, nkPrefix, a, b)
   of tkNumber:
     result = newUIntNodeP(p)
@@ -136,7 +136,6 @@ proc primary(p: var Parser): Node =
     p.getTok()
   else:
     result = p.emptyNode
-    #p.parError("unrecognized token: " & $p.tok.kind)
 
 proc getPrecedence(tok: Token): int =
   let L = tok.literal.len
@@ -166,6 +165,7 @@ proc isBinary(tok: Token): bool =
   result = tok.kind in {tkOpr, tkDotDot}
 
 proc parseExpr(p: var Parser, minPrec: int): Node =
+  # this is operator precedence parsing algorithm
   result = p.primary()
   var opPrec = getPrecedence(p.tok)
   while opPrec >= minPrec and p.tok.indent < 0 and isBinary(p.tok):
@@ -214,7 +214,7 @@ proc parseClassParams(p: var Parser): Node =
 proc parseClass(p: var Parser): Node =
   p.getTok()
   if p.tok.kind != tkIdent:
-    p.parError(errIdentExpected)
+    p.error(errIdentExpected)
 
   let name = newIdentNodeP(p)
   var params = p.emptyNode
@@ -234,7 +234,7 @@ proc parseTopLevel(p: var Parser): Node =
   of tkColonColon: result = parseClass(p)
   of tkStyle: result = parseStyle(p)
   else:
-    p.parError("unknown token")
+    p.error(errInvalidToken, p.tok.kind)
 
 proc parseAll(p: var Parser): Node =
   result = newNodeP(p, nkStmtList)
@@ -244,23 +244,30 @@ proc parseAll(p: var Parser): Node =
     if a.kind != nkEmpty and p.hasProgress:
       addSon(result, a)
     else:
-      p.parError(errExprExpected)
+      p.error(errExprExpected)
       # consume a token here to prevent an endless loop:
       p.getTok()
     if p.tok.indent != 0:
-      p.parError(errInvalidIndentation)
+      p.error(errInvalidIndentation)
 
 proc main() =
   let fileName = paramStr(1)
-  
   var input = newFileStream(fileName)
-  
-  var p = openParser(input, identCache)
-  var root = p.parseAll()
-  p.close()
-  
-  var lay = newLayout(0, identCache)
-  lay.semCheck(root)
-  
+  var ctx = newContext()
+  var knownFile = false
+  let fileIndex = ctx.fileInfoIdx(fileName, knownFile)
+
+  try:
+    var p = openParser(input, ctx, fileIndex)
+    var root = p.parseAll()
+    p.close()
+
+    var lay = newLayout(0, ctx)
+    lay.semCheck(root)
+  except SourceError as srcErr:
+    ctx.printError(srcErr)
+  except Exception as ex:
+    echo "unknown error: ", ex.msg
+
 main()
 

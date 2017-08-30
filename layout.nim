@@ -7,7 +7,7 @@ type
     views*: Table[string, View]
 
   ViewClass* = ref object
-  
+
 proc newView(name: string): View =
   new(result)
   result.top = newVariable(name & ".top")

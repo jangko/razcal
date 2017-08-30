@@ -5,47 +5,98 @@ type
     fullPath: string           # This is a canonical full filesystem path
     projPath*: string          # This is relative to the project's root
     shortName*: string         # short name of the module
-                               
+    fileName*: string          # name.ext
+
   Context* = ref object
     identCache: IdentCache
     fileInfos: seq[FileInfo]
     filenameToIndex: Table[string, int32]
-    
+    binaryPath: string         # app path
+
   LineInfo* = object
     line*, col*: int16
-    fileIndex*: int32   
-  
-  SourceError* = object of Exception
+    fileIndex*: int32
+
+  SourceError* = ref object of Exception
     line*, column*: int
     lineContent*: string
-    
+    fileIndex*: int32
+
   MsgKind* = enum
+    errMissingFinalQuote
+    errInvalidCharacterConstant
+    errClosingQuoteExpected
+    errWrongEscapeChar
+    errUnknownNumberType
+    errInvalidToken
+    errInvalidNumberRange
+    errNumberOverflow
+    errUnexpectedEOLinMultiLineComment
+    errTabsAreNotAllowed
+
+    errClosingParExpected
     errInvalidIndentation
     errExprExpected
-    errIdentExpected    
+    errIdentExpected
     errTokenExpected
-    
+    errSourceEndedUnexpectedly
+    errInvalidExpresion
+
 const
-  InvalidFileIDX* = int32(-1)   
-  
-#const
-  #MsgKindToStr*: array[MsgKind, string] = [
-  
-  
+  InvalidFileIDX* = int32(-1)
+
+const
+  MsgKindToStr*: array[MsgKind, string] = [
+    errMissingFinalQuote: "missing final quote",
+    errInvalidCharacterConstant: "invalid character constant '0x$1'",
+    errClosingQuoteExpected: "closing quote expected",
+    errWrongEscapeChar: "wrong escape character in string '$1'",
+    errUnknownNumberType: "unknown number type",
+    errInvalidToken: "invalid token '$1'",
+    errInvalidNumberRange: "invalid number range: $1",
+    errNumberOverflow: "number overflow",
+    errUnexpectedEOLinMultiLineComment: "unexpected end of file in multi line comment",
+    errTabsAreNotAllowed: "tabs are not allowed",
+
+    errClosingParExpected: "closing parenthesis expected",
+    errInvalidIndentation: "invalid indentation",
+    errExprExpected: "expr expected",
+    errIdentExpected: "ident expected",
+    errTokenExpected: "token expected: $1",
+    errSourceEndedUnexpectedly: "source ended unexpectedly",
+    errInvalidExpresion: "invalid expression",
+
+  ]
+
 proc newContext*(): Context =
   new(result)
   result.identCache = newIdentCache()
   result.fileInfos = @[]
   result.filenameToIndex = initTable[string, int32]()
-  
-#proc msgKindToString*(kind: TMsgKind): string =
-  # later versions may provide translated error messages
-  #result = MsgKindToStr[kind]
+  result.binaryPath = getAppDir()
 
-#proc getMessageStr(msg: TMsgKind, arg: string): string =
-  #result = msgKindToString(msg) % [arg]
-#[  
-proc fileInfoIdx*(filename: string; isKnownFile: var bool): int32 =
+proc getIdent*(ctx: Context, ident: string): Ident {.inline.} =
+  result = ctx.identCache.getIdent(ident)
+
+proc printError*(ctx: Context, err: SourceError) =
+  assert(err.fileIndex >= 0 and err.fileIndex < ctx.fileInfos.len)
+  let info = ctx.fileInfos[err.fileIndex]
+  let msg = "$1($2,$3) Error: $4" % [info.fileName, $err.line, $(err.column + 1), err.msg]
+  echo err.lineContent & spaces(err.column) & "^"
+  echo msg
+
+proc msgKindToString*(ctx: Context, kind: MsgKind, args: varargs[string]): string =
+  # later versions may provide translated error messages
+  result = MsgKindToStr[kind] % args
+
+proc newFileInfo(fullPath, projPath: string): FileInfo =
+  result.fullPath = fullPath
+  result.projPath = projPath
+  let fileName = projPath.extractFilename
+  result.fileName = fileName
+  result.shortName = fileName.changeFileExt("")
+
+proc fileInfoIdx*(ctx: Context, filename: string; isKnownFile: var bool): int32 =
   var
     canon: string
     pseudoPath = false
@@ -59,12 +110,11 @@ proc fileInfoIdx*(filename: string; isKnownFile: var bool): int32 =
     # This flag indicates that we are working with such a path here
     pseudoPath = true
 
-  if filenameToIndexTbl.hasKey(canon):
-    result = filenameToIndexTbl[canon]
+  if ctx.filenameToIndex.hasKey(canon):
+    result = ctx.filenameToIndex[canon]
   else:
     isKnownFile = false
-    result = fileInfos.len.int32
-    fileInfos.add(newFileInfo(canon, if pseudoPath: filename
-                                     else: canon.shortenDir))
-    filenameToIndexTbl[canon] = result
-]#
+    result = ctx.fileInfos.len.int32
+    ctx.fileInfos.add(newFileInfo(canon, if pseudoPath: filename
+                                         else: shortenDir(ctx.binaryPath, canon)))
+    ctx.filenameToIndex[canon] = result
