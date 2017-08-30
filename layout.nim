@@ -5,10 +5,12 @@ type
     top*, left*, right*, bottom*: kiwi.Variable
     width*, height*: kiwi.Variable
     views*: Table[string, View]
+    parent*: View
+    name*: string
 
   ViewClass* = ref object
 
-proc newView(name: string): View =
+proc newView*(name: string): View =
   new(result)
   result.top = newVariable(name & ".top")
   result.left = newVariable(name & ".left")
@@ -16,6 +18,9 @@ proc newView(name: string): View =
   result.bottom = newVariable(name & ".bottom")
   result.width = newVariable(name & ".width")
   result.height = newVariable(name & ".height")
+  result.parent = nil
+  result.views = initTable[string, View]()
+  result.name = name
 
 proc setConstraint*(solver: Solver, view: View) =
   solver.addConstraint(view.right == view.left + view.width)

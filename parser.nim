@@ -258,6 +258,7 @@ proc main() =
   let fileIndex = ctx.fileInfoIdx(fileName, knownFile)
 
   try:
+  #block:
     var p = openParser(input, ctx, fileIndex)
     var root = p.parseAll()
     p.close()
@@ -266,6 +267,8 @@ proc main() =
     lay.semCheck(root)
   except SourceError as srcErr:
     ctx.printError(srcErr)
+  except InternalError as ex:
+    ctx.printError(ex)
   except Exception as ex:
     echo "unknown error: ", ex.msg
 

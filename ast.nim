@@ -87,6 +87,11 @@ proc newNodeI*(kind: NodeKind, lineInfo: LineInfo): Node =
   result = newNode(kind)
   result.lineInfo = lineInfo
 
+proc newSymbolNode*(sym: Symbol): Node =
+  result = newNode(nkSymbol)
+  result.sym = sym
+  result.lineInfo = sym.lineInfo
+
 proc addSon*(father, son: Node) =
   assert son != nil
   if isNil(father.sons): father.sons = @[]
@@ -118,3 +123,14 @@ proc treeRepr*(n: Node, indent = 0): string =
   if n.kind notin NodeWithVal and not n.sons.isNil:
     for s in n.sons:
       result.add treeRepr(s, indent + 2)
+
+proc newSymbol*(kind: SymKind, n: Node): Symbol =
+  assert(n.kind == nkIdent)
+  new(result)
+  result.kind = kind
+  result.name = n.ident
+  result.lineInfo = n.lineInfo
+  
+proc getSymString*(n: Node): string {.inline.} =
+  assert(n.kind == nkSymbol)
+  result = n.sym.name.s

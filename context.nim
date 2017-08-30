@@ -22,6 +22,10 @@ type
     lineContent*: string
     fileIndex*: int32
 
+  InternalError* = ref object of Exception
+    line*: int
+    fileName*: string
+
   MsgKind* = enum
     errMissingFinalQuote
     errInvalidCharacterConstant
@@ -41,6 +45,10 @@ type
     errTokenExpected
     errSourceEndedUnexpectedly
     errInvalidExpresion
+
+    errUnknownNode
+    errCannotOpenFile
+    errDuplicateView
 
 const
   InvalidFileIDX* = int32(-1)
@@ -66,6 +74,9 @@ const
     errSourceEndedUnexpectedly: "source ended unexpectedly",
     errInvalidExpresion: "invalid expression",
 
+    errUnknownNode: "unknown node $1",
+    errCannotOpenFile: "cannot open file: $1",
+    errDuplicateView: "duplicate view not allowed: '$1', the other one is here: $2",
   ]
 
 proc newContext*(): Context =
@@ -83,6 +94,10 @@ proc printError*(ctx: Context, err: SourceError) =
   let info = ctx.fileInfos[err.fileIndex]
   let msg = "$1($2,$3) Error: $4" % [info.fileName, $err.line, $(err.column + 1), err.msg]
   echo err.lineContent & spaces(err.column) & "^"
+  echo msg
+
+proc printError*(ctx: Context, err: InternalError) =
+  let msg = "$1:$2 -> Internal Error: $3" % [err.fileName, $err.line, err.msg]
   echo msg
 
 proc msgKindToString*(ctx: Context, kind: MsgKind, args: varargs[string]): string =
@@ -118,3 +133,14 @@ proc fileInfoIdx*(ctx: Context, filename: string; isKnownFile: var bool): int32 
     ctx.fileInfos.add(newFileInfo(canon, if pseudoPath: filename
                                          else: shortenDir(ctx.binaryPath, canon)))
     ctx.filenameToIndex[canon] = result
+
+proc toFileName*(ctx: Context, info: LineInfo): string =
+  assert(info.fileIndex >= 0 and info.fileIndex < ctx.fileInfos.len)
+  result = ctx.fileInfos[info.fileIndex].fileName
+
+proc toFullPath*(ctx: Context, info: LineInfo): string =
+  assert(info.fileIndex >= 0 and info.fileIndex < ctx.fileInfos.len)
+  result = ctx.fileInfos[info.fileIndex].fullPath
+  
+proc toString*(ctx: Context, info: LineInfo): string =
+  result = "$1($2:$3)" % [ctx.toFileName(info), $info.line, $(info.col+1)]
