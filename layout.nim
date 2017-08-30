@@ -1,10 +1,13 @@
-import kiwi
+import kiwi, tables
 
 type
   View* = ref object
     top*, left*, right*, bottom*: kiwi.Variable
     width*, height*: kiwi.Variable
+    views*: Table[string, View]
 
+  ViewClass* = ref object
+  
 proc newView(name: string): View =
   new(result)
   result.top = newVariable(name & ".top")

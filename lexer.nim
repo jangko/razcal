@@ -1,4 +1,4 @@
-import lexbase, strutils, streams, idents, keywords
+import lexbase, strutils, streams, idents, keywords, context
 
 type
   Lexer* = object of BaseLexer
@@ -27,10 +27,6 @@ type
     line*, col*: int
 
   LexerState = proc(lex: var Lexer, tok: var Token): bool {.locks: 0, gcSafe.}
-
-  LexerError* = object of Exception
-    line*, column*: int
-    lineContent*: string
 
 const
   LineEnd        = {'\l', '\c', EndOfFile}
@@ -83,8 +79,8 @@ proc tokenLit(lex: Lexer): string =
 proc getToken*(lex: var Lexer, tok: var Token) =
   while not lex.nextState(lex, tok): discard
 
-proc lexError(lex: Lexer, message: string): ref LexerError {.raises: [].} =
-  result = newException(LexerError, message)
+proc lexError(lex: Lexer, message: string): ref SourceError {.raises: [].} =
+  result = newException(SourceError, message)
   result.line = lex.lineNumber
   result.column = lex.getColNumber(lex.bufpos)
   result.lineContent = lex.getCurrentLine

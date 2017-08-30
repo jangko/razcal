@@ -1,4 +1,4 @@
-import sets, idents, strutils, layout
+import sets, idents, strutils, layout, context
 
 type
   Scope* = ref object
@@ -6,12 +6,15 @@ type
     symbols*: HashSet[Symbol]
     parent*: Scope
 
-  LineInfo* = object
-    line*, col*: int16
-    fileIndex*: int32
+  SymKind* = enum
+    skUnknown, skView, skClass, skConst, skStyle
 
   Symbol* = ref SymbolObj
   SymbolObj* {.acyclic.} = object of IDobj
+    case kind*: SymKind
+    of skView:
+      view*: View
+    else: nil
     name*: Ident
     lineInfo*: LineInfo
 

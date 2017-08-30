@@ -1,4 +1,4 @@
-import lexer, lexbase, idents, streams, os, ast
+import lexer, lexbase, idents, streams, os, ast, semcheck, context
 
 type
   Parser* = object
@@ -9,12 +9,6 @@ type
     tok*: Token
     fileIndex: int32
     emptyNode: Node
-
-  MsgKind = enum
-    errInvalidIndentation
-    errExprExpected
-    errIdentExpected
-    errTokenExpected
 
 proc getTok(p: var Parser) =
   p.tok.reset()
@@ -191,7 +185,7 @@ proc parseViewBody(p: var Parser): Node =
 
   result = newNodeP(p, nkStmtList)
   withInd(p):
-    while true:
+    while sameInd(p):
       if p.tok.indent < p.currInd: break
       addSon(result, parseExpr(p, -1))
 
@@ -225,7 +219,7 @@ proc parseClass(p: var Parser): Node =
   let name = newIdentNodeP(p)
   var params = p.emptyNode
   p.getTok()
-  if p.tok.kind == tkParLe:
+  if p.tok.kind == tkParLe and p.tok.indent < 0:
     params = parseClassParams(p)
 
   let body = parseViewBody(p)
@@ -251,18 +245,22 @@ proc parseAll(p: var Parser): Node =
       addSon(result, a)
     else:
       p.parError(errExprExpected)
-      # bugfix: consume a token here to prevent an endless loop:
+      # consume a token here to prevent an endless loop:
       p.getTok()
     if p.tok.indent != 0:
       p.parError(errInvalidIndentation)
 
 proc main() =
-  var input = newFileStream(paramStr(1))
-  var identCache = newIdentCache()
+  let fileName = paramStr(1)
+  
+  var input = newFileStream(fileName)
+  
   var p = openParser(input, identCache)
   var root = p.parseAll()
-  echo root.treeRepr
   p.close()
-
+  
+  var lay = newLayout(0, identCache)
+  lay.semCheck(root)
+  
 main()
 

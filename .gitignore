@@ -1,3 +1,6 @@
 *.raz
 *.exe
+*.dll
+*.so
 nimcache
+older
