@@ -120,11 +120,13 @@ proc semCheck*(lay: Layout, n: Node) =
   assert(n.kind == nkStmtList)
   for son in n.sons:
     lay.semStmt(son)
-  #echo n.treeRepr
+
+  echo n.treeRepr
+  #[echo n.treeRepr
   for view in keys(lay.views):
     var v = view
     var name = v.name & "."
     while v.parent != nil:
       name.add(v.parent.name & ".")
       v = v.parent
-    echo name
+    echo name]#

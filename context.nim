@@ -38,6 +38,7 @@ type
     errUnexpectedEOLinMultiLineComment
     errTabsAreNotAllowed
 
+    errClosingBracketExpected
     errClosingParExpected
     errInvalidIndentation
     errExprExpected
@@ -67,6 +68,7 @@ const
     errUnexpectedEOLinMultiLineComment: "unexpected end of file in multi line comment",
     errTabsAreNotAllowed: "tabs are not allowed",
 
+    errClosingBracketExpected: "closing bracket expected",
     errClosingParExpected: "closing parenthesis expected",
     errInvalidIndentation: "invalid indentation",
     errExprExpected: "expr expected",

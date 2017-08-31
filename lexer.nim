@@ -10,10 +10,14 @@ type
 
   TokenKind* = enum
     tkInvalid, tkEof, tkComment, tkNestedComment, tkIdent, tkNumber, tkFloat
-    tkString, tkCharLit, tkColon, tkColonColon, tkSemiColon, tkAccent
-    tkComma, tkDot, tkDotDot, tkOpr
+    tkString, tkCharLit,  tkSemiColon, tkAccent, tkComma
     tkParLe, tkParRi, tkCurlyLe, tkCurlyRi, tkBracketLe, tkBracketRi
-    tkProgram, tkStyle
+
+    tkDot, tkDotDot, tkColon, tkColonColon
+    tkBang, tkChoice
+    tkEquals, tkGreaterOrEqual, tkLessOrEqual, tkOpr
+
+    tkProgram, tkStyle, tkConst, tkEvent, tkProp
 
   TokenVal* = object {.union.}
     iNumber*: uint64
@@ -105,7 +109,7 @@ template singleToken(tokKind: TokenKind) =
   lex.advance
   return true
 
-template doubleToken(kindSingle: TokenKind, secondChar: char, kindDouble: TokenKind) =
+#[template doubleToken(kindSingle: TokenKind, secondChar: char, kindDouble: TokenKind) =
   tok.col = lex.getColNumber(lex.bufpos)
   tok.literal.add lex.c
   if lex.nextChar == secondChar:
@@ -116,6 +120,7 @@ template doubleToken(kindSingle: TokenKind, secondChar: char, kindDouble: TokenK
     tok.kind = kindSingle
   lex.advance
   return true
+]#
 
 template tokenNextState(tokKind: TokenKind, nextStateProc: typed) =
   tok.col = lex.getColNumber(lex.bufpos)
@@ -155,8 +160,6 @@ proc stateOuterScope(lex: var Lexer, tok: var Token): bool =
   of Digits: tokenNextState(tkNumber, stateNumber)
   of '"': tokenNextState(tkString, stateString)
   of '\'': tokenNextState(tkCharLit, stateCharLit)
-  of ':': doubleToken(tkColon, ':', tkColonColon)
-  of '.': doubleToken(tkDot, '.', tkDotDot)
   of EndOfFile:
     tok.indent = 0
     singleToken(tkEof)
@@ -211,11 +214,13 @@ proc stateIdentifier(lex: var Lexer, tok: var Token): bool =
   lex.tokenStartPos = lex.bufpos
   while lex.c in IdentChars:
     lex.advance
+
   tok.literal = lex.tokenLit
   tok.val.ident = lex.context.getIdent(tok.literal)
-  if tok.val.ident.id > 0 and tok.val.ident.id < ord(wEquals):
+  if tok.val.ident.id > ord(wProgram) and tok.val.ident.id < ord(wThis):
     let id = tok.val.ident.id - ord(wProgram)
     tok.kind = TokenKind(id + ord(tkProgram))
+
   lex.nextState = stateOuterScope
   result = true
 
@@ -448,7 +453,12 @@ proc stateOperator(lex: var Lexer, tok: var Token): bool =
   while lex.c in OpChars:
     tok.literal.add lex.c
     lex.advance
+
   tok.val.ident = lex.context.getIdent(tok.literal)
+  if tok.val.ident.id >= ord(wDot) and tok.val.ident.id < ord(wProgram):
+    let id = tok.val.ident.id - ord(wDot)
+    tok.kind = TokenKind(id + ord(tkDot))
+
   lex.nextState = stateOuterScope
   result = true
 

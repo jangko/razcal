@@ -92,12 +92,47 @@ proc parseExpr(p: var Parser, minPrec: int, prev = Node(nil)): Node
 
 proc parseIdentChain(p: var Parser, prev: Node): Node =
   result = prev
-  while p.tok.kind == tkDot:
+  while p.tok.kind == tkDot and p.tok.indent < 0:
     p.getTok()
     if p.tok.kind != tkIdent:
       p.error(errIdentExpected)
     result = newNodeP(p, nkDotCall, result, newIdentNodeP(p))
     p.getTok()
+
+proc parseName(p: var Parser): Node =
+  result = newIdentNodeP(p)
+  p.getTok()
+  if p.tok.kind == tkDot and p.tok.indent < 0:
+    result = parseIdentChain(p, result)
+
+proc parseStringNode(p: var Parser): Node =
+  # sequence of strings are concatenated into one string
+  result = newStringNodeP(p)
+
+  p.getTok()
+  while p.tok.kind == tkString:
+    result.strVal.add p.tok.literal
+    p.getTok()
+    p.optPar()
+
+proc parseNameResolution(p: var Parser): Node =
+  result = parseName(p)
+  if p.tok.kind == tkBracketLe:
+    p.getTok()
+    let idxExpr = p.parseExpr(-1)
+    if p.tok.kind != tkBracketRi:
+      p.error(errClosingBracketExpected)
+    p.getTok()
+    result = newNodeP(p, nkBracketExpr, result, idxExpr)
+
+proc parseNameChain(p: var Parser): Node =
+  result = parseNameResolution(p)
+  if p.tok.kind == tkDot:
+    p.getTok()
+    if p.tok.kind != tkIdent:
+      p.error(errIdentExpected)
+    let rhs = parseNameResolution(p)
+    result = newNodeP(p, nkDotCall, result, rhs)
 
 proc primary(p: var Parser): Node =
   case p.tok.kind:
@@ -122,15 +157,9 @@ proc primary(p: var Parser): Node =
     result = newFloatNodeP(p)
     p.getTok()
   of tkIdent:
-    let a = newIdentNodeP(p)
-    p.getTok()
-    if p.tok.kind == tkDot:
-      result = parseIdentChain(p, a)
-    else:
-      result = a
+    result = parseNameChain(p)
   of tkString:
-    result = newStringNodeP(p)
-    p.getTok()
+    result = parseStringNode(p)
   of tkCharLit:
     result = newCharLitNodeP(p)
     p.getTok()
@@ -208,11 +237,70 @@ proc parseViewClass(p: var Parser): Node =
   result = newNodeP(p, nkViewClass, name, args)
 
 proc parseViewClassList(p: var Parser): Node =
-  result = newNodeP(p, nkViewClassList)
+  if p.tok.kind == tkColonColon and p.tok.indent < 0:
+    result = newNodeP(p, nkViewClassList)
+  else:
+    return p.emptyNode
+
   while true:
     let viewClass = parseViewClass(p)
     if viewClass.kind == nkEmpty: break
     addSon(result, viewClass)
+
+proc parseConst(p: var Parser): Node =
+  result = p.parseExpr(-1)
+
+proc parseConstList(p: var Parser): Node =
+  p.getTok() # skip tkConst
+  result = newNodeP(p, nkConstList)
+  withInd(p):
+    while sameInd(p):
+      let n = parseConst(p)
+      if n.kind == nkEmpty:
+        p.error(errExprExpected)
+      addSon(result, n)
+
+proc parseEvent(p: var Parser): Node =
+  if p.tok.kind != tkIdent:
+    p.error(errIdentExpected)
+  let name = newIdentNodeP(p)
+
+  p.getTok()
+  eat(p, tkColon)
+
+  if p.tok.kind != tkString:
+    p.error(errTokenExpected, tkString)
+
+  let rawCode = parseStringNode(p)
+  result = newNodeP(p, nkEvent, name, rawCode)
+
+proc parseEventList(p: var Parser): Node =
+  p.getTok() # skip tkEvent
+  result = newNodeP(p, nkEventList)
+  withInd(p):
+    while sameInd(p):
+      addSon(result, parseEvent(p))
+
+proc parsePropValue(p: var Parser): Node =
+  result = p.parseExpr(-1)
+
+proc parseProp(p: var Parser): Node =
+  if p.tok.kind != tkIdent:
+    p.error(errIdentExpected)
+  let name = newIdentNodeP(p)
+
+  p.getTok()
+  eat(p, tkColon)
+
+  let propValue = parsePropValue(p)
+  result = newNodeP(p, nkProp, name, propValue)
+
+proc parsePropList(p: var Parser): Node =
+  p.getTok() # skip tkProp
+  result = newNodeP(p, nkPropList)
+  withInd(p):
+    while sameInd(p):
+      addSon(result, parseProp(p))
 
 proc parseViewBody(p: var Parser): Node =
   if p.tok.indent <= p.currInd:
@@ -221,20 +309,23 @@ proc parseViewBody(p: var Parser): Node =
   result = newNodeP(p, nkStmtList)
   withInd(p):
     while sameInd(p):
-      if p.tok.indent < p.currInd: break
-      addSon(result, parseExpr(p, -1))
+      case p.tok.kind
+      of tkProp:
+        let list = parsePropList(p)
+        addSon(result, list)
+      of tkEvent:
+        let list = parseEventList(p)
+        addSon(result, list)
+      of tkConst:
+        let list = parseConstList(p)
+        addSon(result, list)
+      else: p.error(errInvalidToken, p.tok.kind)
 
 proc parseView(p: var Parser): Node =
-  var name = newIdentNodeP(p)
-
-  p.getTok()
-  if p.tok.kind == tkDot:
-    name = parseIdentChain(p, name)
-
-  let viewClasses = parseViewClassList(p)
-  let viewBody = parseViewBody(p)
-
-  result = newNodeP(p, nkView, name, viewClasses, viewBody)
+  let name    = parseName(p)
+  let classes = parseViewClassList(p)
+  let body    = parseViewBody(p)
+  result = newNodeP(p, nkView, name, classes, body)
 
 proc parseClassParam(p: var Parser): Node =
   if p.tok.kind != tkIdent:
@@ -242,17 +333,18 @@ proc parseClassParam(p: var Parser): Node =
 
   let lhs = newIdentNodeP(p)
   p.getTok()
-  if p.tok.kind in {tkSemiColon, tkParRi}:
+  if p.tok.kind in {tkSemiColon, tkComma, tkParRi}:
     return lhs
 
   if p.tok.indent >= 0: p.error(errInvalidIndentation)
-  if not(p.tok.kind == tkOpr and p.tok.val.ident.id == ord(wEquals)):
+  if p.tok.kind != tkEquals:
     p.error(errOnlyAsgnAllowed)
+  let opr = newIdentNodeP(p)
 
   p.getTok()
   let rhs = parseExpr(p, -1)
-  if rhs.kind == nkEmpty: result = lhs
-  else: result = newNodeP(p, nkAsgn, lhs, rhs)
+  if rhs.kind == nkEmpty: p.error(errExprExpected)
+  else: result = newNodeP(p, nkAsgn, opr, lhs, rhs)
 
 proc parseClassParams(p: var Parser): Node =
   p.getTok()

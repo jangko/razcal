@@ -25,9 +25,11 @@ type
     nkInfix, nkPrefix, nkPostfix
     nkInt, nkUInt, nkFloat
     nkString, nkCharLit, nkIdent, nkSymbol
-    nkCall, nkDotCall, nkAsgn
+    nkCall, nkDotCall, nkAsgn, nkBracketExpr
     nkStmtList, nkClassParams, nkViewClassList
-    nkView, nkClass, nkViewClass, nkViewClassArgs, nkStyle
+    nkView, nkClass, nkViewClass, nkViewClassArgs
+    nkEventList, nkPropList, nkConstList
+    nkStyle, nkEvent, nkProp, nkConst
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object
