@@ -9,15 +9,16 @@ type
     c: char
 
   TokenKind* = enum
-    tkInvalid, tkEof, tkComment, tkNestedComment, tkIdent, tkNumber, tkFloat
-    tkString, tkCharLit,  tkSemiColon, tkAccent, tkComma
+    tkInvalid, tkEof, tkComment, tkNestedComment
+    tkIdent, tkNumber, tkFloat, tkString, tkCharLit
+    tkSemiColon, tkAccent, tkComma
     tkParLe, tkParRi, tkCurlyLe, tkCurlyRi, tkBracketLe, tkBracketRi
 
     tkDot, tkDotDot, tkColon, tkColonColon
     tkBang, tkChoice
     tkEquals, tkGreaterOrEqual, tkLessOrEqual, tkOpr
 
-    tkProgram, tkStyle, tkConst, tkEvent, tkProp
+    tkProgram, tkStyle, tkAlias, tkConst, tkEvent, tkProp
 
   TokenVal* = object {.union.}
     iNumber*: uint64

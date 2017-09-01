@@ -1,30 +1,37 @@
 import strutils, idents, os, tables, utils
 
 type
+  # information about a file(raz, lua, etc)
   FileInfo* = object
     fullPath: string           # This is a canonical full filesystem path
     projPath*: string          # This is relative to the project's root
     shortName*: string         # short name of the module
     fileName*: string          # name.ext
 
+  # global app context, one per app
   Context* = ref object
-    identCache: IdentCache
-    fileInfos: seq[FileInfo]
-    filenameToIndex: Table[string, int32]
+    identCache: IdentCache     # only one IdentCache per app
+    fileInfos: seq[FileInfo]   # FileInfo list
+    filenameToIndex: Table[string, int32] # map canonical filename into FileInfo index
     binaryPath: string         # app path
 
+  # used in Node and Symbol
   LineInfo* = object
     line*, col*: int16
-    fileIndex*: int32
+    fileIndex*: int32          # index into FileInfo list
 
+  # Lexer and Parser throw this exception
   SourceError* = ref object of Exception
     line*, column*: int
-    lineContent*: string
-    fileIndex*: int32
+    lineContent*: string       # full source line content
+    fileIndex*: int32          # index into FileInfo list
 
+  # Semcheck and friends throw this exception
+  # useful for debugging purpose
+  # A stable app should never throw this exception
   InternalError* = ref object of Exception
-    line*: int
-    fileName*: string
+    line*: int                 # Nim source line
+    fileName*: string          # Nim source file name
 
   MsgKind* = enum
     errMissingFinalQuote
@@ -51,6 +58,7 @@ type
     errUnknownNode
     errCannotOpenFile
     errDuplicateView
+    errDuplicateClass
 
 const
   InvalidFileIDX* = int32(-1)
@@ -81,6 +89,7 @@ const
     errUnknownNode: "unknown node $1",
     errCannotOpenFile: "cannot open file: $1",
     errDuplicateView: "duplicate view not allowed: '$1', the other one is here: $2",
+    errDuplicateClass: "duplicate class not allowed: '$1', the other one is here: $2",
   ]
 
 proc newContext*(): Context =
@@ -91,9 +100,12 @@ proc newContext*(): Context =
   result.binaryPath = getAppDir()
 
 proc getIdent*(ctx: Context, ident: string): Ident {.inline.} =
+  # a helper proc to get ident
   result = ctx.identCache.getIdent(ident)
 
 proc marker(err: SourceError): string =
+  # the purpose of this function is try to trim a very long line
+  # into reasonable length and put error marker '^' below it
   if err.lineContent.len <= 80:
     return err.lineContent & spaces(err.column) & "^"
 
@@ -144,6 +156,7 @@ proc newFileInfo(fullPath, projPath: string): FileInfo =
   result.shortName = fileName.changeFileExt("")
 
 proc fileInfoIdx*(ctx: Context, filename: string; isKnownFile: var bool): int32 =
+  # map file name into FileInfo list's index
   var
     canon: string
     pseudoPath = false

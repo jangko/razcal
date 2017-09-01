@@ -59,23 +59,23 @@ proc newNodeP(p: Parser, kind: NodeKind, sons: varargs[Node]): Node =
   result.lineInfo = if sons.len == 0: p.getLineInfo() else: sons[0].lineInfo
 
 proc newIdentNodeP(p: Parser): Node =
-  result = newIdentNode(nkIdent, p.tok.val.ident)
+  result = newIdentNode(p.tok.val.ident)
   result.lineInfo = p.getLineInfo
 
 proc newUIntNodeP(p: Parser): Node =
-  result = newUIntNode(nkUInt, p.tok.val.iNumber)
+  result = newUIntNode(p.tok.val.iNumber)
   result.lineInfo = p.getLineInfo
 
 proc newFloatNodeP(p: Parser): Node =
-  result = newFloatNode(nkFloat, p.tok.val.fNumber)
+  result = newFloatNode(p.tok.val.fNumber)
   result.lineInfo = p.getLineInfo
 
 proc newStringNodeP(p: Parser): Node =
-  result = newStringNode(nkString, p.tok.literal)
+  result = newStringNode(p.tok.literal)
   result.lineInfo = p.getLineInfo
 
 proc newCharLitNodeP(p: Parser): Node =
-  result = newCharLitNode(nkCharLit, p.tok.literal)
+  result = newCharLitNode(p.tok.literal)
   result.lineInfo = p.getLineInfo
 
 proc openParser*(inputStream: Stream, context: Context, fileIndex: int32): Parser =
@@ -211,7 +211,7 @@ proc parseExpr(p: var Parser, minPrec: int, prev = Node(nil)): Node =
 proc parseViewClassArgs(p: var Parser): Node =
   p.getTok()
   p.optInd()
-  result = newNodeP(p, nkViewClassArgs)
+  result = newNodeP(p, nkViewParam)
   while true:
     addSon(result, parseExpr(p, -1))
     if p.tok.kind == tkParRi: break

@@ -2,12 +2,12 @@ import ast, layout, idents, kiwi, tables, context, hashes, strutils
 
 type
   Layout* = ref object of IDobj
-    root*: View
-    views*: Table[View, Node]
-    classes*: Table[string, Node]
-    solver*: kiwi.Solver
-    context: Context
-    lastParent*: View      # last processed parent view
+    root*: View                      # every layout/scene root
+    viewTbl*: Table[View, Node]      # view to SymbolNode.skView
+    classTbl*: Table[string, Node]   # string to SymbolNode.skClass
+    solver*: kiwi.Solver             # constraint solver
+    context*: Context                # ref to app global context
+    lastParent*: View                # last processed parent view
 
 proc hash(view: View): Hash =
   hash(cast[int](view))
@@ -16,11 +16,13 @@ proc newLayout*(id: int, context: Context): Layout =
   new(result)
   result.id = id
   result.root = newView("layout" & $id)
-  result.views = initTable[View, Node]()
+  result.viewTbl = initTable[View, Node]()
+  result.classTbl = initTable[string, Node]()
   result.solver = newSolver()
   result.context = context
 
 proc internalErrorImpl(lay: Layout, kind: MsgKind, fileName: string, line: int, args: varargs[string, `$`]) =
+  # internal error aid debugging
   var err = new(InternalError)
   err.msg = lay.context.msgKindToString(kind, args)
   err.line = line
@@ -28,24 +30,31 @@ proc internalErrorImpl(lay: Layout, kind: MsgKind, fileName: string, line: int, 
   raise err
 
 template internalError(lay: Layout, kind: MsgKind, args: varargs[string, `$`]) =
+  # pointing to Nim source code location
+  # where the error occured
   lay.internalErrorImpl(kind,
     instantiationInfo().fileName,
     instantiationInfo().line,
     args)
 
 proc getCurrentLine*(lay: Layout, info: LineInfo): string =
+  # we don't have lexer getCurrentLine anymore
+  # so we simulate one here
   let fileName = lay.context.toFullPath(info)
   var f = open(fileName)
   if f.isNil(): lay.internalError(errCannotOpenFile, fileName)
   var line: string
-  var n = 0
-  while f.readLine(line) and n < info.line:
+  var n = 1
+  while f.readLine(line):
+    if n == info.line:
+      result = line & "\n"
+      break
     inc n
-    if n == info.line - 1: result = line & "\n"
   f.close()
   if result.isNil: result = ""
 
 proc sourceError(lay: Layout, kind: MsgKind, n: Node, args: varargs[string, `$`]) =
+  # report any error during semcheck
   var err = new(SourceError)
   err.msg = lay.context.msgKindToString(kind, args)
   err.line = n.lineInfo.line
@@ -55,41 +64,57 @@ proc sourceError(lay: Layout, kind: MsgKind, n: Node, args: varargs[string, `$`]
   raise err
 
 proc createView(lay: Layout, n: Node): Node =
-  var view = lay.lastParent.newView(n.ident.s)
-  result   = newViewSymbol(skView, n, view).newSymbolNode()
+  var view = lay.lastParent.newView(n.identString)
+  result   = newViewSymbol(n, view).newSymbolNode()
   lay.lastParent = view
-  lay.views[view] = result
+  lay.viewTbl[view] = result
   lay.solver.setBasicConstraint(view)
 
 proc semViewName(lay: Layout, n: Node, lastIdent: Node): Node =
+  # check and resolve view name hierarchy
+  # such as view1.view1child.view1grandson
   case n.kind
   of nkDotCall:
     assert(n.sons.len == 2)
-    n.sons[0] = lay.semViewName(n.sons[0], lastIdent)
-    assert(n.sons[0].kind == nkSymbol)
-    lay.lastParent = n.sons[0].sym.view
-    n.sons[1] = lay.semViewName(n.sons[1], lastIdent)
-    result = n.sons[1]
+    n[0] = lay.semViewName(n[0], lastIdent)
+    assert(n[0].kind == nkSymbol)
+    lay.lastParent = n[0].sym.view
+    n[1] = lay.semViewName(n[1], lastIdent)
+    result = n[1]
   of nkIdent:
-    var view = lay.lastParent.views.getOrDefault(n.ident.s)
+    var view = lay.lastParent.views.getOrDefault(n.identString)
     if view.isNil:
       result = lay.createView(n)
     else:
-      assert(lay.views.hasKey(view))
+      assert(lay.viewTbl.hasKey(view))
       if lastIdent == n:
-        let symNode = lay.views[view]
+        let symNode = lay.viewTbl[view]
         let info = symNode.lineInfo
         let prev = lay.context.toString(info)
-        lay.sourceError(errDuplicateView, n, symNode.getSymString, prev)
-      result = lay.views[view]
+        lay.sourceError(errDuplicateView, n, symNode.symString, prev)
+      result = lay.viewTbl[view]
   else:
     internalError(lay, errUnknownNode, n.kind)
 
 proc semViewClass(lay: Layout, n: Node): Node =
   result = n
 
+proc semConstList(lay: Layout, n: Node) =
+  discard
+
+proc semEventList(lay: Layout, n: Node) =
+  discard
+
+proc semPropList(lay: Layout, n: Node) =
+  discard
+
 proc semViewBody(lay: Layout, n: Node): Node =
-  result = n
+  case n.kind
+  of nkConstList: lay.semConstList(n)
+  of nkEventList: lay.semEventList(n)
+  of nkPropList:  lay.semPropList(n)
+  else:
+    internalError(lay, errUnknownNode, n.kind)
 
 proc semView(lay: Layout, n: Node) =
   assert(n.sons.len == 3)
@@ -97,17 +122,25 @@ proc semView(lay: Layout, n: Node) =
   # need to reset the lastParent
   lay.lastParent = lay.root
   var lastIdent = Node(nil)
-  if n.sons[0].kind == nkIdent: lastIdent = n.sons[0]
-  if lastIdent.isNil and n.sons[0].kind == nkDotCall:
-    let son = n.sons[0].sons[1]
+  if n[0].kind == nkIdent: lastIdent = n[0]
+  if lastIdent.isNil and n[0].kind == nkDotCall:
+    let son = n[0].sons[1]
     if son.kind == nkIdent: lastIdent = son
-  n.sons[0] = lay.semViewName(n.sons[0], lastIdent)
-  n.sons[1] = lay.semViewClass(n.sons[1])
-  n.sons[2] = lay.semViewBody(n.sons[2])
+  n[0] = lay.semViewName(n[0], lastIdent)
+  n[1] = lay.semViewClass(n[1])
+  n[2] = lay.semViewBody(n[2])
 
 proc semClass(lay: Layout, n: Node) =
   assert(n.sons.len == 3)
-  echo n.treeRepr
+  let className = n[0]
+  let symNode = lay.classTbl.getOrDefault(className.identString)
+  if symNode.isNil:
+    let sym = newClassSymbol(className, n)
+    lay.classTbl[className.identString] = newSymbolNode(sym)
+  else:
+    let info = symNode.lineInfo
+    let prev = lay.context.toString(info)
+    lay.sourceError(errDuplicateClass, className, symNode.symString, prev)
 
 proc semStmt(lay: Layout, n: Node) =
   case n.kind
@@ -122,6 +155,7 @@ proc semCheck*(lay: Layout, n: Node) =
     lay.semStmt(son)
 
   echo n.treeRepr
+
   #[echo n.treeRepr
   for view in keys(lay.views):
     var v = view

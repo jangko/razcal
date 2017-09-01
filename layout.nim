@@ -10,8 +10,6 @@ type
     name*: string                # view's name
     idx*: int                    # index into children position/-1 if invalid
 
-  Class* = ref object
-
 proc newView*(name: string): View =
   new(result)
   result.top = newVariable(name & ".top")

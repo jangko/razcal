@@ -6,8 +6,8 @@ type
     wBang, wChoice                          # must match with
     wEquals, wGreaterOrEqual, wLessOrEqual  # TokenKind's order
                                             # to ensure proper
-    wProgram, wStyle, wConst                # token generated
-    wEvent, wProp
+    wProgram, wStyle, wAlias                # token generated
+    wEvent, wProp, wConst
 
     wThis, wSuper, wChild, wPrev, wNext
     wLeft, wRight, wTop, wBottom
@@ -37,8 +37,8 @@ const
     "!", "|",
     "=", ">=", "<=",
 
-    "program", "style", "const",
-    "event", "prop",
+    "program", "style", "alias",
+    "const", "event", "prop", 
 
     "this", "super", "child", "prev", "next",
     "left", "right", "top", "bottom",

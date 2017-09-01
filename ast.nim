@@ -7,7 +7,7 @@ type
     parent*: Scope
 
   SymKind* = enum
-    skUnknown, skView, skClass, skConst, skStyle, skParam
+    skUnknown, skView, skClass, skAlias, skStyle, skParam
 
   Symbol* = ref SymbolObj
   SymbolObj* {.acyclic.} = object of IDobj
@@ -15,7 +15,7 @@ type
     of skView:
       view*: View
     of skClass:
-      class*: Class
+      class*: Node   # Node.nkClass
     else: nil
     name*: Ident
     lineInfo*: LineInfo
@@ -27,7 +27,7 @@ type
     nkString, nkCharLit, nkIdent, nkSymbol
     nkCall, nkDotCall, nkAsgn, nkBracketExpr
     nkStmtList, nkClassParams, nkViewClassList
-    nkView, nkClass, nkViewClass, nkViewClassArgs
+    nkView, nkClass, nkViewClass, nkViewParam
     nkEventList, nkPropList, nkConstList
     nkStyle, nkEvent, nkProp, nkConst
 
@@ -59,28 +59,28 @@ proc newNode*(kind: NodeKind): Node =
   result.lineInfo.col = -1
   result.lineInfo.fileIndex = -1
 
-proc newIntNode*(kind: NodeKind, intVal: BiggestInt): Node =
-  result = newNode(kind)
+proc newIntNode*(intVal: BiggestInt): Node =
+  result = newNode(nkInt)
   result.intVal = intVal
 
-proc newUIntNode*(kind: NodeKind, uintVal: BiggestUInt): Node =
-  result = newNode(kind)
+proc newUIntNode*(uintVal: BiggestUInt): Node =
+  result = newNode(nkUInt)
   result.uintVal = uintVal
 
-proc newFloatNode*(kind: NodeKind, floatVal: BiggestFloat): Node =
-  result = newNode(kind)
+proc newFloatNode*(floatVal: BiggestFloat): Node =
+  result = newNode(nkFloat)
   result.floatVal = floatVal
 
-proc newStringNode*(kind: NodeKind, strVal: string): Node =
-  result = newNode(kind)
+proc newStringNode*(strVal: string): Node =
+  result = newNode(nkString)
   result.strVal = strVal
 
-proc newCharLitNode*(kind: NodeKind, charLit: string): Node =
-  result = newNode(kind)
+proc newCharLitNode*(charLit: string): Node =
+  result = newNode(nkCharLit)
   result.charLit = charLit
 
-proc newIdentNode*(kind: NodeKind, ident: Ident): Node =
-  result = newNode(kind)
+proc newIdentNode*(ident: Ident): Node =
+  result = newNode(nkIdent)
   result.ident = ident
 
 proc newTree*(kind: NodeKind; children: varargs[Node]): Node =
@@ -128,6 +128,29 @@ proc treeRepr*(n: Node, indent = 0): string =
     for s in n.sons:
       result.add treeRepr(s, indent + 2)
 
+proc copyTree*(n: Node): Node =
+  case n.kind
+  of nkInt: result = newIntNode(n.intVal)
+  of nkUInt: result = newUIntNode(n.uintVal)
+  of nkFloat: result = newFloatNode(n.floatVal)
+  of nkString: result = newStringNode(n.strVal)
+  of nkCharLit: result = newCharLitNode(n.charLit)
+  of nkIdent: result = newIdentNode(n.ident)
+  of nkSymbol: result = newSymbolNode(n.sym)
+  else:
+    result = newNode(n.kind)
+    if not n.sons.isNil:
+      result.sons = newSeq[Node](n.sons.len)
+      for i in 0.. <n.sons.len:
+        result.sons[i] = copyTree(n.sons[i])
+  result.lineInfo = n.lineInfo
+
+proc `[]`*(n: Node, idx: int): Node {.inline.} =
+  result = n.sons[idx]
+
+proc `[]=`*(n: Node, idx: int, val: Node) {.inline.} =
+  n.sons[idx] = val
+
 proc newSymbol*(kind: SymKind, n: Node): Symbol =
   assert(n.kind == nkIdent)
   new(result)
@@ -135,17 +158,21 @@ proc newSymbol*(kind: SymKind, n: Node): Symbol =
   result.name = n.ident
   result.lineInfo = n.lineInfo
 
-proc newViewSymbol*(kind: SymKind, n: Node, view: View): Symbol =
-  assert(n.kind == nkIdent)
-  new(result)
-  result.kind = kind
-  result.name = n.ident
-  result.lineInfo = n.lineInfo
+proc newViewSymbol*(n: Node, view: View): Symbol =
+  result = newSymbol(skView, n)
   result.view = view
 
-proc getSymString*(n: Node): string {.inline.} =
+proc newClassSymbol*(n: Node, cls: Node): Symbol =
+  result = newSymbol(skClass, n)
+  result.class = cls
+
+proc symString*(n: Node): string {.inline.} =
   assert(n.kind == nkSymbol)
   result = n.sym.name.s
+
+proc identString*(n: Node): string {.inline.} =
+  assert(n.kind == nkIdent)
+  result = n.ident.s
 
 proc newScope*(): Scope =
   new(result)
