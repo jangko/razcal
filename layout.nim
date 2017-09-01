@@ -39,6 +39,9 @@ proc setBasicConstraint*(solver: Solver, view: View) =
   solver.addConstraint(view.bottom >= view.top)
   solver.addConstraint(view.width == view.height)
 
+proc getChildren*(view: View): seq[View] =
+  view.children
+  
 proc print*(view: View) =
   echo view.top
   echo view.left

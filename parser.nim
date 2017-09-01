@@ -405,7 +405,7 @@ proc parseAll(p: var Parser): Node =
 proc main() =
   let fileName = paramStr(1)
   var input = newFileStream(fileName)
-  var ctx = newContext()
+  var ctx = openContext()
   var knownFile = false
   let fileIndex = ctx.fileInfoIdx(fileName, knownFile)
 
@@ -421,8 +421,12 @@ proc main() =
     ctx.printError(srcErr)
   except InternalError as ex:
     ctx.printError(ex)
+  except OtherError as ex:
+    echo ex.msg
   except Exception as ex:
     echo "unknown error: ", ex.msg
+
+  ctx.close()
 
 main()
 

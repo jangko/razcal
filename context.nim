@@ -1,4 +1,5 @@
 import strutils, idents, os, tables, utils
+import nimLUA
 
 type
   # information about a file(raz, lua, etc)
@@ -14,6 +15,7 @@ type
     fileInfos: seq[FileInfo]   # FileInfo list
     filenameToIndex: Table[string, int32] # map canonical filename into FileInfo index
     binaryPath: string         # app path
+    lua: lua_State
 
   # used in Node and Symbol
   LineInfo* = object
@@ -33,7 +35,10 @@ type
     line*: int                 # Nim source line
     fileName*: string          # Nim source file name
 
+  OtherError* = ref object of Exception
+
   MsgKind* = enum
+    # lexer's errors
     errMissingFinalQuote
     errInvalidCharacterConstant
     errClosingQuoteExpected
@@ -45,6 +50,7 @@ type
     errUnexpectedEOLinMultiLineComment
     errTabsAreNotAllowed
 
+    # parser's errors
     errClosingBracketExpected
     errClosingParExpected
     errInvalidIndentation
@@ -55,16 +61,21 @@ type
     errInvalidExpresion
     errOnlyAsgnAllowed
 
+    # semcheck's errors
     errUnknownNode
-    errCannotOpenFile
     errDuplicateView
     errDuplicateClass
+
+    # other's errors
+    errCannotOpenFile
+    errLua
 
 const
   InvalidFileIDX* = int32(-1)
 
 const
   MsgKindToStr*: array[MsgKind, string] = [
+    # lexer's errors
     errMissingFinalQuote: "missing final quote",
     errInvalidCharacterConstant: "invalid character constant '0x$1'",
     errClosingQuoteExpected: "closing quote expected",
@@ -76,6 +87,7 @@ const
     errUnexpectedEOLinMultiLineComment: "unexpected end of file in multi line comment",
     errTabsAreNotAllowed: "tabs are not allowed",
 
+    # parser's errors
     errClosingBracketExpected: "closing bracket expected",
     errClosingParExpected: "closing parenthesis expected",
     errInvalidIndentation: "invalid indentation",
@@ -86,22 +98,48 @@ const
     errInvalidExpresion: "invalid expression",
     errOnlyAsgnAllowed: "only assignment allowed here",
 
+    # semcheck's errors
     errUnknownNode: "unknown node $1",
-    errCannotOpenFile: "cannot open file: $1",
     errDuplicateView: "duplicate view not allowed: '$1', the other one is here: $2",
     errDuplicateClass: "duplicate class not allowed: '$1', the other one is here: $2",
+
+    # other errors
+    errCannotOpenFile: "cannot open file: $1",
+    errLua: "lua VM error: $1",
   ]
 
-proc newContext*(): Context =
+proc openContext*(): Context =
   new(result)
   result.identCache = newIdentCache()
   result.fileInfos = @[]
   result.filenameToIndex = initTable[string, int32]()
   result.binaryPath = getAppDir()
+  result.lua = newNimLua()
+
+proc close*(ctx: Context) =
+  ctx.lua.close()
+
+proc getLua*(ctx: Context): lua_State =
+  ctx.lua
 
 proc getIdent*(ctx: Context, ident: string): Ident {.inline.} =
   # a helper proc to get ident
   result = ctx.identCache.getIdent(ident)
+
+proc msgKindToString*(ctx: Context, kind: MsgKind, args: varargs[string]): string =
+  # later versions may provide translated error messages
+  result = MsgKindToStr[kind] % args
+
+proc otherError*(ctx: Context, kind: MsgKind, args: varargs[string, `$`]) =
+  var err = new(OtherError)
+  err.msg = ctx.msgKindToString(kind, args)
+  raise err
+
+proc executeLua*(ctx: Context, fileName: string) =
+  if ctx.lua.doFile(fileName) != 0.cint:
+    let errorMsg = ctx.lua.toString(-1)
+    ctx.lua.pop(1)
+    ctx.otherError(errLua, errorMsg)
 
 proc marker(err: SourceError): string =
   # the purpose of this function is try to trim a very long line
@@ -143,10 +181,6 @@ proc printError*(ctx: Context, err: SourceError) =
 proc printError*(ctx: Context, err: InternalError) =
   let msg = "$1:$2 -> Internal Error: $3" % [err.fileName, $err.line, err.msg]
   echo msg
-
-proc msgKindToString*(ctx: Context, kind: MsgKind, args: varargs[string]): string =
-  # later versions may provide translated error messages
-  result = MsgKindToStr[kind] % args
 
 proc newFileInfo(fullPath, projPath: string): FileInfo =
   result.fullPath = fullPath
