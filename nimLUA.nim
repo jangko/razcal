@@ -674,7 +674,7 @@ proc nimLuaPanic(L: PState): cint {.cdecl.} =
   echo "panic"
   echo L.toString(-1)
   L.pop(1)
-  return 1
+  return 0
 
 #call this before you use this library
 proc newNimLua*(readOnlyEnum = false): PState =
@@ -815,17 +815,28 @@ macro bindEnum*(arg: varargs[untyped]): untyped =
 #runtime type check helper for string
 proc checkNimString*(L: PState, idx: cint): string =
   if L.isString(idx) != 0: result = L.toString(idx)
-  else:
-    discard L.error("expected string arg")
-    result = ""
+  else: result = ""
 
 #runtime type check helper for bool
 proc checkNimBool*(L: PState, idx: cint): bool =
-  if L.isBoolean(idx):
-    result = if L.toBoolean(idx) == 0: false else: true
-  else:
-    discard L.error("expected bool arg")
-    result = false
+  if L.isBoolean(idx): result = if L.toBoolean(idx) == 0: false else: true
+  else: result = false
+
+proc checkNimInteger*(L: PState, idx: cint): int =
+  if L.isInteger(idx) != 0: result = L.toInteger(idx).int
+  else: result = 0
+
+proc checkNimNumber*(L: PState, idx: cint): float64 =
+  if L.isNumber(idx) != 0: result = L.toNumber(idx).float64
+  else: result = 0.0
+
+proc checkCString*(L: PState, idx: cint): cstring =
+  if L.isString(idx) != 0: result = L.toLString(idx, nil)
+  else: result = nil
+
+proc checkNimChar*(L: PState, idx: cint): char =
+  if L.isInteger(idx) != 0: result = L.toInteger(idx).char
+  else: result = chr(0)
 
 let
   intTypes {.compileTime.} = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64"]
@@ -835,23 +846,23 @@ proc constructBasicArg(mType: NimNode, i: int, procName: string): string {.compi
   let argType = $mType
   for c in intTypes:
     if c == argType:
-      return "L.checkInteger(" & $i & ")." & c & "\n"
+      return "L.checkNimInteger(" & $i & ")." & c & "\n"
 
   for c in floatTypes:
     if c == argType:
-      return "L.checkNumber(" & $i & ")." & c & "\n"
+      return "L.checkNimNumber(" & $i & ")." & c & "\n"
 
   if argType == "string":
     return "L.checkNimString(" & $i & ")\n"
 
   if argType == "cstring":
-    return "L.checkString(" & $i & ")\n"
+    return "L.checkCString(" & $i & ")\n"
 
   if argType == "bool":
     return "L.checkNimBool(" & $i & ")\n"
 
   if argType == "char":
-    return "L.checkInteger(" & $i & ").chr\n"
+    return "L.checkNimChar(" & $i & ")\n"
 
   if argType == "pointer":
     return "L.toUserData(" & $i & ")\n"
@@ -1829,6 +1840,8 @@ proc bindObjectSingleMethod(ctx: proxyDesc, bd: bindDesc, n: NimNode, glueProc, 
   var glue = ""
   if bd.isClosure: glue.add addClosureEnv(SL, procName, n, bd)
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
+  glue.add "  if L.gettop() != $1: return 0\n" % [$argList.len]
+  glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
   glue.add "  var proxy = " & checkUD(subjectName, "1")
   glue.add genOvCallSingle(ctx, newProcElem(retType, argList), procName, "", {ovfUseObject, ovfUseRet}, bd)
   result = glue
@@ -1867,6 +1880,8 @@ proc bindObjectOverloadedMethod(ctx: proxyDesc, bd: bindDesc, ov: NimNode, glueP
     return glue
 
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
+  glue.add "  if L.gettop() < 1: return 0\n"
+  glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
   glue.add "  var proxy = " & checkUD(subjectName, "1")
   glue.add genOvCall(ctx, ovl, procName, {ovfUseObject, ovfUseRet}, bd)
   glue.add "  discard L.error(\"$1: invalid param count\")\n" % [procName]
@@ -1881,6 +1896,8 @@ proc bindGetter(ctx: proxyDesc, glueProc, propName, subjectName: string, propTyp
     procName = $subject & "." & propName
 
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
+  glue.add "  if L.gettop() != 1: return 0\n"
+  glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
   glue.add "  var proxy = " & checkUD(subjectName, "1")
   glue.add constructRet(propType, procCall, "  ", procName)
   glue.add "  return 1\n"
@@ -1894,6 +1911,8 @@ proc bindSetter(ctx: proxyDesc, glueProc, propName, subjectName: string, propTyp
     procName = $subject & "." & propName
 
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
+  glue.add "  if L.gettop() != 1: return 0\n"
+  glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
   glue.add "  var proxy = " & checkUD(subjectName, "1")
   glue.add "  $1 = $2" % [procCall, constructArg(ctx, propType, 2, procName)]
   glue.add "  return 0\n"
@@ -1969,6 +1988,8 @@ proc bindObjectImpl*(ctx: proxyDesc): NimNode {.compileTime.} =
 
   if isRefType(subject) and not hasName("dtor" & $subject):
     glue.add "proc $1_destructor(L: PState): cint {.cdecl.} =\n" % [subjectName]
+    glue.add "  if L.gettop() != 1: return 0\n"
+    glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
     glue.add "  var proxy = " & checkUD(subjectName, "1")
     glue.add "  GC_unref(proxy.ud)\n"
     glue.add "  proxy.ud = nil\n"

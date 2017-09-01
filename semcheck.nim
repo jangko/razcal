@@ -163,6 +163,9 @@ proc semStmt(lay: Layout, n: Node) =
 
 let layoutSingleton = 0xDEADBEEF
 
+proc smell(lay: Layout, abc: int) =
+  echo abc
+  
 proc semCheck*(lay: Layout, n: Node) =
   assert(n.kind == nkStmtList)
   for son in n.sons:
@@ -171,7 +174,7 @@ proc semCheck*(lay: Layout, n: Node) =
   #echo n.treeRepr
 
   var L = lay.context.getLua()
-  
+
   #nimLuaOptions(nloDebug, true)
   L.bindObject(View):
     newView -> "new"
@@ -181,6 +184,7 @@ proc semCheck*(lay: Layout, n: Node) =
 
   L.bindObject(Layout):
     getRoot
+    smell
 
   # store Layout reference
   L.pushLightUserData(cast[pointer](layoutSingleton)) # push key
