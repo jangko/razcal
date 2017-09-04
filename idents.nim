@@ -14,6 +14,9 @@ type
     wordCounter: int
     idAnon*, emptyIdent*: Ident
 
+template hash*(ident: Ident): Hash =
+  hash(ident.id)
+
 proc `$`*(self: Ident): string =
   result = if self.isNil: "nil" else: self.s
 

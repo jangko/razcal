@@ -1,4 +1,4 @@
-import sets, idents, strutils, layout, context
+import sets, idents, strutils, layout, context, kiwi
 
 type
   Scope* = ref object
@@ -22,14 +22,42 @@ type
 
   NodeKind* = enum
     nkEmpty
-    nkInfix, nkPrefix, nkPostfix
-    nkInt, nkUInt, nkFloat
-    nkString, nkCharLit, nkIdent, nkSymbol
-    nkCall, nkDotCall, nkAsgn, nkBracketExpr
+    nkInfix     # a opr b
+    nkPrefix    # opr n
+    nkPostfix   # opr n
+
+    # basic terminal node
+    nkInt, nkUInt, nkFloat, nkString, nkCharLit, nkIdent
+
+    nkSymbol    # act as pointer to other node
+
+    nkCall        # f(args)
+    nkDotCall     # arg.f
+    nkAsgn        # n '=' expr
+    nkBracketExpr # n[expr]
+
+    # x.sons[1..n]
     nkStmtList, nkClassParams, nkViewClassList
-    nkView, nkClass, nkViewClass, nkViewParam
     nkEventList, nkPropList, nkConstList
-    nkStyle, nkEvent, nkProp, nkConst
+
+    # constraint's related node
+    nkChoice       # a list of exprs, excluding '|' operator
+    nkConstraint   # kiwi.Constraint
+    nkConstExpr    # kiwi.Expression
+    nkConstTerm    # kiwi.Term
+    nkConstVar     # kiwi.Variable
+
+    # class instantiation used by view
+    nkViewClass, nkViewParam
+
+    # a view, a class, a style section
+    nkView, nkClass, nkStyle
+
+    # an event and a property node inside view
+    nkEvent, nkProp
+
+    # a list of choices, including {'=','>=','<='} [in]equality
+    nkConst # this will become nkConstraint
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object
@@ -48,6 +76,14 @@ type
       ident*: Ident
     of nkSymbol:
       sym*: Symbol
+    of nkConstraint:
+      constraint*: kiwi.Constraint
+    of nkConstExpr:
+      expression*: kiwi.Expression
+    of nkConstTerm:
+      term*: kiwi.Term
+    of nkConstVar:
+      variable*: kiwi.Variable
     else:
       sons*: seq[Node]
     lineInfo*: LineInfo
@@ -113,12 +149,17 @@ proc val*(n: Node): string =
       result.add(toHex(ord(c), 2))
   of nkIdent: result = $n.ident
   of nkSymbol: result = $n.sym.name
+  of nkConstVar: result = n.variable.name & "(" & $n.variable.value & ")"
+  of nkConstExpr: result = $n.expression
+  of nkConstTerm: result = $n.term
+  of nkConstraint: result = $n.constraint
   else: result = ""
 
 proc treeRepr*(n: Node, indent = 0): string =
-  const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkCharLit, nkIdent, nkSymbol}
+  const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkCharLit, nkIdent, nkSymbol,
+    nkConstraint, nkConstExpr, nkConstTerm, nkConstVar}
   let spaces = repeat(' ', indent)
-  if n.isNil: return spaces & "nil"
+  if n.isNil: return spaces & "nil\n"
   let val = n.val
   if val.len == 0:
     result = "$1$2\n" % [spaces, $n.kind]
@@ -151,6 +192,9 @@ proc `[]`*(n: Node, idx: int): Node {.inline.} =
 proc `[]=`*(n: Node, idx: int, val: Node) {.inline.} =
   n.sons[idx] = val
 
+proc len*(n: Node): int {.inline.} =
+  result = n.sons.len
+
 proc newSymbol*(kind: SymKind, n: Node): Symbol =
   assert(n.kind == nkIdent)
   new(result)
@@ -166,13 +210,13 @@ proc newClassSymbol*(n: Node, cls: Node): Symbol =
   result = newSymbol(skClass, n)
   result.class = cls
 
-proc symString*(n: Node): string {.inline.} =
+template symString*(n: Node): string =
   assert(n.kind == nkSymbol)
-  result = n.sym.name.s
+  n.sym.name.s
 
-proc identString*(n: Node): string {.inline.} =
+template identString*(n: Node): string =
   assert(n.kind == nkIdent)
-  result = n.ident.s
+  n.ident.s
 
 proc newScope*(): Scope =
   new(result)

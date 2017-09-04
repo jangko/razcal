@@ -143,7 +143,8 @@ proc primary(p: var Parser): Node =
       p.error(errClosingParExpected)
     p.getTok()
   of tkEof:
-    p.error(errSourceEndedUnexpectedly)
+    result = p.emptyNode
+    #p.error(errSourceEndedUnexpectedly)
   of tkOpr:
     let a = newIdentNodeP(p)
     p.getTok()
@@ -247,17 +248,50 @@ proc parseViewClassList(p: var Parser): Node =
     if viewClass.kind == nkEmpty: break
     addSon(result, viewClass)
 
+proc parseChoice(p: var Parser): Node =
+  var exp = p.parseExpr(-1)
+  if p.tok.kind == tkChoice:
+    result = newNodeP(p, nkChoice, exp)
+    while p.tok.kind == tkChoice:
+      p.getTok()
+      exp = p.parseExpr(-1)
+      if exp.kind == nkEmpty:
+        p.error(errExprExpected)
+      addSon(result, exp)
+  else:
+    result = exp
+
 proc parseConst(p: var Parser): Node =
-  result = p.parseExpr(-1)
+  const constOpr = [tkEquals, tkGreaterOrEqual, tkLessOrEqual]
+  var choice = p.parseChoice()
+  if choice.kind == nkEmpty: return choice
+  if choice.kind == nkBracketExpr:
+    p.error(errPropExpected)
+  if p.tok.kind in constOpr:
+    result = newNodeP(p, nkConst, choice)
+    while p.tok.kind in constOpr:
+      let opr = newIdentNodeP(p)
+      addSon(result, opr)
+      p.getTok()
+      choice = p.parseChoice()
+      if choice.kind == nkEmpty:
+        p.error(errExprExpected)
+      if choice.kind == nkBracketExpr:
+        p.error(errPropExpected)
+      addSon(result, choice)
+  else:
+    p.error(errConstOprNeeded)
 
 proc parseConstList(p: var Parser): Node =
   p.getTok() # skip tkConst
-  result = newNodeP(p, nkConstList)
+  result = p.emptyNode
   withInd(p):
     while sameInd(p):
       let n = parseConst(p)
       if n.kind == nkEmpty:
-        p.error(errExprExpected)
+        #p.error(errExprExpected)
+        return n
+      if result.kind == nkEmpty: result = newNodeP(p, nkConstList)
       addSon(result, n)
 
 proc parseEvent(p: var Parser): Node =
@@ -319,6 +353,8 @@ proc parseViewBody(p: var Parser): Node =
       of tkConst:
         let list = parseConstList(p)
         addSon(result, list)
+      of tkEof:
+        break
       else: p.error(errInvalidToken, p.tok.kind)
 
 proc parseView(p: var Parser): Node =
@@ -425,6 +461,7 @@ proc main() =
     echo ex.msg
   except Exception as ex:
     echo "unknown error: ", ex.msg
+    writeStackTrace()
 
   ctx.close()
 

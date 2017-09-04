@@ -1,30 +1,33 @@
-import kiwi, tables
+import kiwi, tables, idents
 
 type
   View* = ref object
     top*, left*, right*, bottom*: kiwi.Variable
     width*, height*: kiwi.Variable
-    views*: Table[string, View]  # map string to children view
-    children*: seq[View]         # children view
-    parent*: View                # nil if no parent/root
-    name*: string                # view's name
-    idx*: int                    # index into children position/-1 if invalid
+    centerX*, centerY*: kiwi.Variable
+    views*: Table[Ident, View]  # map string to children view
+    children*: seq[View]        # children view
+    parent*: View               # nil if no parent/root
+    name*: Ident                # view's name
+    idx*: int                   # index into children position/-1 if invalid
 
-proc newView*(name: string): View =
+proc newView*(name: Ident): View =
   new(result)
-  result.top = newVariable(name & ".top")
-  result.left = newVariable(name & ".left")
-  result.right = newVariable(name & ".right")
-  result.bottom = newVariable(name & ".bottom")
-  result.width = newVariable(name & ".width")
-  result.height = newVariable(name & ".height")
+  result.top = newVariable(name.s & ".top")
+  result.left = newVariable(name.s & ".left")
+  result.right = newVariable(name.s & ".right")
+  result.bottom = newVariable(name.s & ".bottom")
+  result.width = newVariable(name.s & ".width")
+  result.height = newVariable(name.s & ".height")
+  result.centerX = newVariable(name.s & ".centerX")
+  result.centerY = newVariable(name.s & ".centerY")
   result.parent = nil
-  result.views = initTable[string, View]()
+  result.views = initTable[Ident, View]()
   result.name = name
   result.children = @[]
   result.idx = -1
 
-proc newView*(parent: View, name: string): View =
+proc newView*(parent: View, name: Ident): View =
   assert(parent != nil)
   result = newView(name)
   result.idx = parent.children.len
@@ -36,11 +39,15 @@ proc setBasicConstraint*(solver: Solver, view: View) =
   solver.addConstraint(view.right == view.left + view.width)
   solver.addConstraint(view.bottom == view.top + view.height)
   solver.addConstraint(view.right >= view.left)
-  solver.addConstraint(view.bottom >= view.top)
-  solver.addConstraint(view.width == view.height)
+  solver.addConstraint(view.bottom >= view.top)  
+  solver.addConstraint(view.centerX == (view.right - view.left) / 2)
+  solver.addConstraint(view.centerY == (view.bottom - view.top) / 2)
 
 proc getChildren*(view: View): seq[View] =
   view.children
+  
+proc getName*(view: View): string =
+  view.name.s
   
 proc print*(view: View) =
   echo view.top
@@ -49,6 +56,8 @@ proc print*(view: View) =
   echo view.right
   echo view.width
   echo view.height
+  echo view.centerX
+  echo view.centerY
 
 #[proc main() =
   var

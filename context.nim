@@ -60,11 +60,24 @@ type
     errSourceEndedUnexpectedly
     errInvalidExpresion
     errOnlyAsgnAllowed
+    errConstOprNeeded
+    errPropExpected
 
     # semcheck's errors
     errUnknownNode
     errDuplicateView
     errDuplicateClass
+    errClassNotFound
+    errParamCountNotMatch
+    errUndefinedProp
+    errUnknownProp
+    errUndefinedRel
+    errUnknownRel
+    errWrongRelation
+    errWrongRelationIndex
+    errUnknownOpr
+    errUnknownOperation
+    errStringNotAllowed
 
     # other's errors
     errCannotOpenFile
@@ -97,11 +110,24 @@ const
     errSourceEndedUnexpectedly: "source ended unexpectedly",
     errInvalidExpresion: "invalid expression",
     errOnlyAsgnAllowed: "only assignment allowed here",
+    errConstOprNeeded: "one of constraint [in]equality needed: '=', '<=', '>='",
+    errPropExpected: "prop expected",
 
     # semcheck's errors
     errUnknownNode: "unknown node $1",
     errDuplicateView: "duplicate view not allowed: '$1', the other one is here: $2",
     errDuplicateClass: "duplicate class not allowed: '$1', the other one is here: $2",
+    errClassNotFound: "class '$1' not found",
+    errParamCountNotMatch: "expected $1 param(s) but got $2 param(s)",
+    errUndefinedProp: "`$1` is an undefined property",
+    errUnknownProp: "`$1` is an unknown prop",
+    errUndefinedRel: "`$1` is an undefined relation",
+    errUnknownRel: "`$1` is an unknown relation",
+    errWrongRelation: "relation not found: $1",
+    errWrongRelationIndex: "relation at index $1 not found",
+    errUnknownOpr: "unknown operator: '$1'",
+    errUnknownOperation: "unknown operation $1 $2 $3",
+    errStringNotAllowed: "string not allowed here",
 
     # other errors
     errCannotOpenFile: "cannot open file: $1",
