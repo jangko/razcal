@@ -3,12 +3,13 @@ import nimLUA, keywords
 
 type
   Layout* = ref object of IDobj
-    root*: View                   # every layout/scene root
-    viewTbl*: Table[View, Node]  # view to SymbolNode.skView
-    classTbl*: Table[Ident, Node] # string to SymbolNode.skClass
-    solver*: kiwi.Solver          # constraint solver
-    context*: Context             # ref to app global context
-    lastView*: View             # last processed parent view
+    root: View                   # every layout/scene root
+    viewTbl: Table[View, Node]   # view to SymbolNode.skView
+    classTbl: Table[Ident, Node] # string to SymbolNode.skClass
+    solver: kiwi.Solver          # constraint solver
+    context: Context             # ref to app global context
+    lastView: View               # last processed parent view
+    emptyNode: Node
 
 template hash(view: View): Hash =
   hash(cast[int](view))
@@ -27,6 +28,7 @@ proc newLayout*(id: int, context: Context): Layout =
   result.classTbl = initTable[Ident, Node]()
   result.solver = newSolver()
   result.context = context
+  result.emptyNode = newNode(nkEmpty)
 
   let root = context.getIdent("root")
   let n = newIdentNode(root)
@@ -284,7 +286,7 @@ proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
   else:
     internalError(lay, errUnknownRel, id)
 
-proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident): Node =
+proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): Node =
   case n.kind
   of nkIdent:
     let id = toKeyWord(n)
@@ -298,17 +300,22 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident): Node =
       if id in constRel:
         let view = lay.selectViewRel(lay.lastView, id)
         if view.isNil:
-          lay.sourceError(errWrongRelation, n, n.ident)
+          if choiceMode:
+            return lay.emptyNode
+          else:
+            lay.sourceError(errWrongRelation, n, n.ident)
         result = lay.viewTbl[view]
       else:
         lay.sourceError(errUndefinedRel, n, n.ident)
   of nkDotCall:
     let tempView = lay.lastView
     assert(n.sons.len == 2)
-    n[0] = lay.resolveTerm(n[0], lastIdent)
+    n[0] = lay.resolveTerm(n[0], lastIdent, choiceMode)
+    if choiceMode and n[0].kind == nkEmpty: return n[0]
     assert(n[0].kind == nkSymbol)
     lay.lastView = n[0].sym.view
-    n[1] = lay.resolveTerm(n[1], lastIdent)
+    n[1] = lay.resolveTerm(n[1], lastIdent, choiceMode)
+    if choiceMode and n[1].kind == nkEmpty: return n[1]
     lay.lastView = tempView
     result = n[1]
   of nkBracketExpr:
@@ -322,7 +329,10 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident): Node =
       else: internalError(lay, errUnknownNode, n[1].kind)
       let view = lay.selectViewRel(lay.lastView, id, idx)
       if view.isNil:
-        lay.sourceError(errWrongRelationIndex, n[1], idx)
+        if choiceMode:
+          return lay.emptyNode
+        else:
+          lay.sourceError(errWrongRelationIndex, n[1], idx)
       result = lay.viewTbl[view]
     else:
       lay.sourceError(errUndefinedRel, n[0], n[0].ident)
@@ -387,31 +397,58 @@ proc termOpPlus(lay: Layout, a, b, op: Node): Node =
   elif a.kind == nkConstTerm and b.kind in numberNode:
     result = newNodeI(nkConstExpr, a.lineInfo)
     result.expression = a.term + b.toNumber()
-  else: internalError(lay, errUnknownOperation, a.kind, '+', b.kind)
+  else: internalError(lay, errUnknownOperation, a.kind, "'+'", b.kind)
 
 proc termOpMinus(lay: Layout, a, b, op: Node): Node =
-  if a.kind in numberNode and b.kind in numberNode:
+  if a.kind == nkConstExpr and b.kind in numberNode:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.expression - b.toNumber()
+  elif a.kind == nkConstExpr and b.kind == nkConstVar:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.expression - b.variable
+  elif a.kind == nkConstExpr and b.kind == nkConstTerm:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.expression - b.term
+  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.expression - b.expression
+  elif a.kind == nkConstTerm and b.kind == nkConstExpr:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.term - b.expression
+  elif a.kind == nkConstTerm and b.kind == nkConstTerm:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.term - b.term
+  elif a.kind == nkConstTerm and b.kind == nkConstVar:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.term - b.variable
+  elif a.kind == nkConstTerm and b.kind in numberNode:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.term - b.toNumber()
+  elif a.kind == nkConstVar and b.kind == nkConstExpr:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.variable - b.expression
+  elif a.kind == nkConstVar and b.kind == nkConstTerm:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.variable - b.term
+  elif a.kind == nkConstVar and b.kind == nkConstVar:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.variable - b.variable
+  elif a.kind == nkConstVar and b.kind in numberNode:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.variable - b.toNumber()
+  elif a.kind in numberNode and b.kind in numberNode:
     result = newNodeI(nkFloat, a.lineInfo)
     result.floatVal = a.toNumber() - b.toNumber()
   elif a.kind in numberNode and b.kind == nkConstVar:
     result = newNodeI(nkConstExpr, a.lineInfo)
     result.expression = a.toNumber() - b.variable
-  elif a.kind == nkConstVar and b.kind in numberNode:
+  elif a.kind in numberNode and b.kind == nkConstTerm:
     result = newNodeI(nkConstExpr, a.lineInfo)
-    result.expression = a.variable - b.toNumber()
-  elif a.kind == nkConstExpr and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
-    result.expression = a.expression - b.toNumber()
+    result.expression = a.toNumber() - b.term
   elif a.kind in numberNode and b.kind == nkConstExpr:
     result = newNodeI(nkConstExpr, a.lineInfo)
     result.expression = a.toNumber() - b.expression
-  elif a.kind == nkConstExpr and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
-    result.expression = a.expression - b.variable
-  elif a.kind == nkConstVar and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
-    result.expression = a.variable - b.expression
-  else: internalError(lay, errUnknownOperation, a.kind, '-', b.kind)
+  else: internalError(lay, errUnknownOperation, a.kind, "'-'", b.kind)
 
 proc termOpMul(lay: Layout, a, b, op: Node): Node =
   if a.kind in numberNode and b.kind in numberNode:
@@ -420,52 +457,67 @@ proc termOpMul(lay: Layout, a, b, op: Node): Node =
   elif a.kind in numberNode and b.kind == nkConstVar:
     result = newNodeI(nkConstTerm, a.lineInfo)
     result.term = a.toNumber() * b.variable
+  elif a.kind in numberNode and b.kind == nkConstExpr:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.toNumber() * b.expression
+  elif a.kind in numberNode and b.kind == nkConstTerm:
+    result = newNodeI(nkConstTerm, a.lineInfo)
+    result.term = a.toNumber() * b.term
   elif a.kind == nkConstVar and b.kind in numberNode:
     result = newNodeI(nkConstTerm, a.lineInfo)
     result.term = a.variable * b.toNumber()
   elif a.kind == nkConstExpr and b.kind in numberNode:
     result = newNodeI(nkConstExpr, a.lineInfo)
     result.expression = a.expression * b.toNumber()
-  elif a.kind in numberNode and b.kind == nkConstExpr:
+  elif a.kind == nkConstTerm and b.kind in numberNode:
+    result = newNodeI(nkConstTerm, a.lineInfo)
+    result.term = a.term * b.toNumber()
+  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
     result = newNodeI(nkConstExpr, a.lineInfo)
-    result.expression = a.toNumber() * b.expression
+    result.expression = a.expression * b.expression
   elif a.kind == nkConstExpr and b.kind == nkConstVar:
     #result = newNodeI(nkConstExpr, a.lineInfo)
     #result.expression = a.expression * b.variable
-    lay.sourceError(errUnknownOperation, op, a.kind, '*', b.kind)
+    lay.sourceError(errIllegalOperation, op, a.kind, "'*'", b.kind)
   elif a.kind == nkConstVar and b.kind == nkConstExpr:
     #result = newNodeI(nkConstExpr, a.lineInfo)
     #result.expression = a.variable * b.expression
-    lay.sourceError(errUnknownOperation, op, a.kind, '*', b.kind)
-  else: internalError(lay, errUnknownOperation, a.kind, '*', b.kind)
+    lay.sourceError(errIllegalOperation, op, a.kind, "'*'", b.kind)
+  else: internalError(lay, errUnknownOperation, a.kind, "'*'", b.kind)
 
 proc termOpDiv(lay: Layout, a, b, op: Node): Node =
-  if a.kind in numberNode and b.kind in numberNode:
+  if a.kind == nkConstVar and b.kind in numberNode:
+    result = newNodeI(nkConstTerm, a.lineInfo)
+    result.term = a.variable / b.toNumber()
+  elif a.kind == nkConstTerm and b.kind in numberNode:
+    result = newNodeI(nkConstTerm, a.lineInfo)
+    result.term = a.term / b.toNumber()
+  elif a.kind == nkConstExpr and b.kind in numberNode:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.expression / b.toNumber()
+  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
+    result = newNodeI(nkConstExpr, a.lineInfo)
+    result.expression = a.expression / b.expression
+  elif a.kind in numberNode and b.kind in numberNode:
     result = newNodeI(nkFloat, a.lineInfo)
     result.floatVal = a.toNumber() / b.toNumber()
   elif a.kind in numberNode and b.kind == nkConstVar:
     #result = newNodeI(nkConstExpr, a.lineInfo)
     #result.expression = a.toNumber() / b.variable
-    lay.sourceError(errUnknownOperation, op, a.kind, '/', b.kind)
-  elif a.kind == nkConstVar and b.kind in numberNode:
-    result = newNodeI(nkConstTerm, a.lineInfo)
-    result.term = a.variable / b.toNumber()
-  elif a.kind == nkConstExpr and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
-    result.expression = a.expression / b.toNumber()
+    lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
   elif a.kind in numberNode and b.kind == nkConstExpr:
     #result = newNodeI(nkConstExpr, a.lineInfo)
     #result.expression = a.toNumber() / b.expression
-    lay.sourceError(errUnknownOperation, op, a.kind, '/', b.kind)
+    lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
   elif a.kind == nkConstExpr and b.kind == nkConstVar:
     #result = newNodeI(nkConstExpr, a.lineInfo)
     #result.expression = a.expression / b.variable
-    lay.sourceError(errUnknownOperation, op, a.kind, '/', b.kind)
+    lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
   elif a.kind == nkConstVar and b.kind == nkConstExpr:
     #result = newNodeI(nkConstExpr, a.lineInfo)
     #result.expression = a.variable / b.expression
-    lay.sourceError(errUnknownOperation, op, a.kind, '/', b.kind)
-  else: internalError(lay, errUnknownOperation, a.kind, '/', b.kind)
+    lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
+  else: internalError(lay, errUnknownOperation, a.kind, "'/'", b.kind)
 
 proc termOp(lay: Layout, a, b, op: Node, id: SpecialWords): Node =
   case id
@@ -475,7 +527,7 @@ proc termOp(lay: Layout, a, b, op: Node, id: SpecialWords): Node =
   of wDiv:   result = lay.termOpDiv(a, b, op)
   else: internalError(lay, errUnknownOpr, id)
 
-proc secConstExpr(lay: Layout, n: Node): Node =
+proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
   case n.kind
   of nkIdent:
     let id = toKeyWord(n)
@@ -489,18 +541,25 @@ proc secConstExpr(lay: Layout, n: Node): Node =
   of nkDotCall:
     assert(n.sons.len == 2)
     assert(n[1].kind == nkIdent)
-    result = lay.resolveTerm(n, n[1].ident)
+    result = lay.resolveTerm(n, n[1].ident, choiceMode)
   of nkInfix:
-    result = n
     assert(n.len == 3)
     let id = toKeyWord(n[0])
     if id notin constTermOp:
       lay.sourceError(errUnknownOpr, n[0], n[0].ident.s)
-    let lhs = lay.secConstExpr(n[1])
-    let rhs = lay.secConstExpr(n[2])
+    let lhs = lay.secConstExpr(n[1], choiceMode)
+    let rhs = lay.secConstExpr(n[2], choiceMode)
+    if choiceMode:
+      if lhs.kind == nkEmpty or lhs.kind == nkEmpty:
+        return lay.emptyNode
     result = lay.termOp(lhs, rhs, n[0], id)
   of nkString:
     lay.sourceError(errStringNotAllowed, n)
+  of nkChoice:
+    for cc in n.sons:
+      result = lay.secConstExpr(cc, true)
+      if result.kind != nkEmpty: return result
+    lay.sourceError(errNoValidBranch, n)
   else:
     internalError(lay, errUnknownNode, n.kind)
 

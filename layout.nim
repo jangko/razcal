@@ -39,16 +39,16 @@ proc setBasicConstraint*(solver: Solver, view: View) =
   solver.addConstraint(view.right == view.left + view.width)
   solver.addConstraint(view.bottom == view.top + view.height)
   solver.addConstraint(view.right >= view.left)
-  solver.addConstraint(view.bottom >= view.top)  
+  solver.addConstraint(view.bottom >= view.top)
   solver.addConstraint(view.centerX == (view.right - view.left) / 2)
   solver.addConstraint(view.centerY == (view.bottom - view.top) / 2)
 
 proc getChildren*(view: View): seq[View] =
   view.children
-  
+
 proc getName*(view: View): string =
   view.name.s
-  
+
 proc print*(view: View) =
   echo view.top
   echo view.left

@@ -178,6 +178,18 @@ proc copyTree*(n: Node): Node =
   of nkCharLit: result = newCharLitNode(n.charLit)
   of nkIdent: result = newIdentNode(n.ident)
   of nkSymbol: result = newSymbolNode(n.sym)
+  of nkConstraint:
+    result = newNode(nkConstraint)
+    result.constraint = n.constraint
+  of nkConstExpr:
+    result = newNode(nkConstExpr)
+    result.expression = n.expression
+  of nkConstTerm:
+    result = newNode(nkConstTerm)
+    result.term = n. term
+  of nkConstVar:
+    result = newNode(nkConstVar)
+    result.variable = n.variable
   else:
     result = newNode(n.kind)
     if not n.sons.isNil:

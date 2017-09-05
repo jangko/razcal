@@ -77,7 +77,9 @@ type
     errWrongRelationIndex
     errUnknownOpr
     errUnknownOperation
+    errIllegalOperation
     errStringNotAllowed
+    errNoValidBranch
 
     # other's errors
     errCannotOpenFile
@@ -127,7 +129,9 @@ const
     errWrongRelationIndex: "relation at index $1 not found",
     errUnknownOpr: "unknown operator: '$1'",
     errUnknownOperation: "unknown operation $1 $2 $3",
+    errIllegalOperation: "illegal operation $1 $2 $3",
     errStringNotAllowed: "string not allowed here",
+    errNoValidBranch: "no valid branch of choices",
 
     # other errors
     errCannotOpenFile: "cannot open file: $1",
