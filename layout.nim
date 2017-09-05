@@ -46,8 +46,32 @@ proc setBasicConstraint*(solver: Solver, view: View) =
 proc getChildren*(view: View): seq[View] =
   view.children
 
-proc getName*(view: View): string =
+template getName*(view: View): string =
   view.name.s
+
+template getTop*(view: View): float64 =
+  view.top.value
+
+template getLeft*(view: View): float64 =
+  view.left.value
+
+template getRight*(view: View): float64 =
+  view.right.value
+
+template getBottom*(view: View): float64 =
+  view.bottom.value
+
+template getWidth*(view: View): float64 =
+  view.width.value
+
+template getHeight*(view: View): float64 =
+  view.height.value
+
+template getCenterX*(view: View): float64 =
+  view.centerX.value
+
+template getCenterY*(view: View): float64 =
+  view.centerY.value
 
 proc print*(view: View) =
   echo view.top

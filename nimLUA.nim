@@ -460,11 +460,20 @@ proc collectSym(ids: var seq[string], arg: NimNode) {.compileTime.} =
       if k.mVal.kind == nnkIdent: ignoreGenerics(ids, $k.mVal, generics)
 
 proc checkProp(subject: NimNode, prop: string): bool {.compileTime.} =
-  let recList = if subject[2].kind == nnkRefTy: subject[2][0][2] else: subject[2][2]
+  let parent = if subject.kind == nnkRefTy: subject[0][1] else: subject[1]
+  if parent.kind == nnkOfInherit:
+    let parentName = parent[0]
+    var t = getTypeImpl(parentName)
+    if t.kind == nnkRefTy: t = getTypeImpl(t[0])
+    if checkProp(t, prop): return true
+
+  let recList = if subject.kind == nnkRefTy: subject[0][2] else: subject[2]
+  if recList.kind == nnkEmpty: return false
+
   for n in recList:
     for i in 0..n.len-3:
       let k = n[i]
-      if k.kind == nnkIdent:
+      if k.kind in {nnkIdent, nnkSym}:
         if $k == prop: return true
       elif k.kind == nnkPostfix:
         if $k[1] == prop: return true
@@ -528,7 +537,7 @@ proc proxyMixer*(ctx: proxyDesc, proxyName: string): NimNode {.compileTime.} =
     var ii = 0
     let subject = getImpl(ctx.subject.symbol)
     for k in ctx.propList:
-      if not checkProp(subject, k.node):
+      if not checkProp(subject[2], k.node):
         error($ctx.subject & ": don't have properties " & k.name)
       let comma = if ii < ctx.propList.len-1: "," else: ""
       nlb.add "    (\"$1\", \"$2\", $3, $4, $5)$6\n" %
@@ -1818,8 +1827,8 @@ proc bindOverloadedConstructor(ctx: proxyDesc, bd: bindDesc, ov: NimNode, gluePr
   result = glue
 
 proc bindObjectSingleMethod(ctx: proxyDesc, bd: bindDesc, n: NimNode, glueProc, procName, subjectName: string): string {.compileTime.} =
-  if n.kind != nnkProcDef:
-    error("bindFunction: " & procName & " is not a proc")
+  if n.kind notin {nnkProcDef, nnkTemplateDef}:
+    error("bindFunction: " & procName & " is not a proc/template")
 
   let
     params = n[3]
@@ -1858,8 +1867,8 @@ proc bindObjectOverloadedMethod(ctx: proxyDesc, bd: bindDesc, ov: NimNode, glueP
 
   for s in children(ov):
     let n = getImpl(s.symbol)
-    if n.kind != nnkProcDef:
-      error("bindConstructor: " & procName & " is not a proc")
+    if n.kind notin {nnkProcDef, nnkTemplateDef}:
+      error("bindConstructor: " & procName & " is not a proc/template")
 
     if bd.isClosure: glue.add addClosureEnv(SL, procName, n, bd, i)
     let params = n[3]
@@ -1919,17 +1928,24 @@ proc bindSetter(ctx: proxyDesc, glueProc, propName, subjectName: string, propTyp
   result = glue
 
 proc getPropType(subject: NimNode, prop: string): NimNode {.compileTime.} =
-  let recList = if subject[2].kind == nnkRefTy: subject[2][0][2] else: subject[2][2]
+  let parent = if subject.kind == nnkRefTy: subject[0][1] else: subject[1]
+  if parent.kind == nnkOfInherit:
+    let parentName = parent[0]
+    var t = getTypeImpl(parentName)
+    if t.kind == nnkRefTy: t = getTypeImpl(t[0])
+    let ret = getPropType(t, prop)
+    if ret != nil: return ret
+
+  let recList = if subject.kind == nnkRefTy: subject[0][2] else: subject[2]
   for n in recList:
     for i in 0..n.len-3:
       let k = n[i]
-      if k.kind == nnkIdent:
+      if k.kind in {nnkIdent, nnkSym}:
         if $k == prop: return n[n.len-2]
       elif k.kind == nnkPostfix:
         if $k[1] == prop: return n[n.len-2]
       else:
         error("unknown prop construct")
-  error("$2: not a prop of $1" % [$subject, prop])
 
 proc bindObjectImpl*(ctx: proxyDesc): NimNode {.compileTime.} =
   let
@@ -1971,10 +1987,14 @@ proc bindObjectImpl*(ctx: proxyDesc): NimNode {.compileTime.} =
   if ctx.propList.len > 0:
     for n in ctx.propList:
       let
-        propName = getAccQuotedName(n.node, n.lhsKind)
+        propName   = getAccQuotedName(n.node, n.lhsKind)
         getterProc = "nimLUAgetter" & $proxyCount
         setterProc = "nimLUAsetter" & $proxyCount
-        propType = getPropType(getImpl(subject.symbol), propName)
+        subjectT   = getImpl(subject.symbol)
+        propType   = getPropType(subjectT[2], propName)
+
+      if propType == nil:
+        error("'$1': not a prop of $2" % [propName, $subjectT[0]])
 
       if n.getter:
         regs.add "  luaL_Reg(name: \"_get_$1\", fn: $2),\n" % [n.name, getterProc]

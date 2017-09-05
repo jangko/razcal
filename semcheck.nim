@@ -175,46 +175,6 @@ proc semTopLevel*(lay: Layout, n: Node) =
   for son in n.sons:
     lay.semStmt(son)
 
-const layoutSingleton = 0xDEADBEEF
-
-proc luaBinding(lay: Layout) =
-  var L = lay.context.getLua()
-
-  #nimLuaOptions(nloDebug, true)
-  L.bindObject(View):
-    newView -> "new"
-    getName
-    getChildren
-  #nimLuaOptions(nloDebug, false)
-
-  L.bindObject(Layout):
-    getRoot
-
-  # store Layout reference
-  L.pushLightUserData(cast[pointer](layoutSingleton)) # push key
-  L.pushLightUserData(cast[pointer](lay)) # push value
-  L.setTable(LUA_REGISTRYINDEX)           # registry[lay.addr] = lay
-
-  # register the only entry point of layout hierarchy to lua
-  proc layoutProxy(L: PState): cint {.cdecl.} =
-    getRegisteredType(Layout, mtName, pxName)
-    var ret = cast[ptr pxName](L.newUserData(sizeof(pxName)))
-
-    # retrieve Layout
-    L.pushLightUserData(cast[pointer](layoutSingleton)) # push key
-    L.getTable(LUA_REGISTRYINDEX)           # retrieve value
-    ret.ud = cast[Layout](L.toUserData(-1)) # convert to layout
-    L.pop(1) # remove userdata
-    GC_ref(ret.ud)
-    L.getMetatable(mtName)
-    discard L.setMetatable(-2)
-    return 1
-
-  L.pushCfunction(layoutProxy)
-  L.setGlobal("getLayout")
-
-  lay.context.executeLua("apple.lua")
-
 proc secViewClass(lay: Layout, n: Node) =
   assert(n.kind in {nkViewClassList, nkEmpty})
   for vc in n.sons:
@@ -723,12 +683,72 @@ proc secTopLevel*(lay: Layout, n: Node) =
   for son in n.sons:
     lay.secStmt(son)
 
-proc semCheck*(lay: Layout, n: Node) =
+const layoutSingleton = 0xDEADBEEF
+
+proc luaBinding(lay: Layout) =
+  var L = lay.context.getLua()
+
+  #nimLuaOptions(nloDebug, true)
+  L.bindObject(View):
+    newView -> "new"
+    getName -> "_get_name"
+    getChildren -> "_get_children"
+    getTop -> "_get_top"
+    getLeft -> "_get_left"
+    getRight -> "_get_right"
+    getBottom -> "_get_bottom"
+    getWidth -> "_get_width"
+    getHeight -> "_get_height"
+    getCenterX -> "_get_centerX"
+    getCenterY -> "_get_centerY"
+    idx(get)
+  #nimLuaOptions(nloDebug, false)
+
+  #type
+    #abc = object of RootObj
+    #apple = object of abc
+    
+  L.bindObject(Layout):
+    getRoot
+    getRoot -> "_get_root"
+    id(get)
+
+  #L.bindObject(apple):
+    #id(get)
+  
+  # store Layout reference
+  L.pushLightUserData(cast[pointer](layoutSingleton)) # push key
+  L.pushLightUserData(cast[pointer](lay)) # push value
+  L.setTable(LUA_REGISTRYINDEX)           # registry[lay.addr] = lay
+
+  # register the only entry point of layout hierarchy to lua
+  proc layoutProxy(L: PState): cint {.cdecl.} =
+    getRegisteredType(Layout, mtName, pxName)
+    var ret = cast[ptr pxName](L.newUserData(sizeof(pxName)))
+
+    # retrieve Layout
+    L.pushLightUserData(cast[pointer](layoutSingleton)) # push key
+    L.getTable(LUA_REGISTRYINDEX)           # retrieve value
+    ret.ud = cast[Layout](L.toUserData(-1)) # convert to layout
+    L.pop(1) # remove userdata
+    GC_ref(ret.ud)
+    L.getMetatable(mtName)
+    discard L.setMetatable(-2)
+    return 1
+
+  L.pushCfunction(layoutProxy)
+  L.setGlobal("getLayout")
+
+  lay.context.executeLua("apple.lua")
+  
+proc semCheck*(lay: Layout, n: Node) =  
   lay.semTopLevel(n)
   lay.secTopLevel(n)
 
-  echo n.treeRepr
+  #echo n.treeRepr
   lay.solver.updateVariables()
 
-  for v in keys(lay.viewTbl):
-    v.print
+  #for v in keys(lay.viewTbl):
+    #v.print
+  lay.luaBinding()
+  echo lay.root.name

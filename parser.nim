@@ -445,15 +445,15 @@ proc main() =
   var knownFile = false
   let fileIndex = ctx.fileInfoIdx(fileName, knownFile)
 
-  try:
-  #block:
+  #try:
+  block:
     var p = openParser(input, ctx, fileIndex)
     var root = p.parseAll()
     p.close()
 
     var lay = newLayout(0, ctx)
     lay.semCheck(root)
-  except SourceError as srcErr:
+  #[except SourceError as srcErr:
     ctx.printError(srcErr)
   except InternalError as ex:
     ctx.printError(ex)
@@ -461,7 +461,7 @@ proc main() =
     echo ex.msg
   except Exception as ex:
     echo "unknown error: ", ex.msg
-    writeStackTrace()
+    writeStackTrace()]#
 
   ctx.close()
 
