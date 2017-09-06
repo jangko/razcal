@@ -32,8 +32,8 @@ Using new emerging language like Nim and moonscript,
 plus a home brew layout language, what kind of hybrid mutant razcal will be?
 
 I will be nice, you can choose what component to be included in your final executable, 
-you can add more functionality either using Nim, Lua, or moonscript as a module.
-I already and always be easy to build. 
+you can add more functionality either using Nim, Lua, or moonscript as a module. 
+It already and always be easy to build. 
 ### roadmap
 
 right now, razcal pretty much still an embryo, 
@@ -44,11 +44,12 @@ backend renderer not available, test suite not available,
 documentation none, tutorial none.
 
 * parser
-  *  parse style section
-  *  parse prop section
+  * parse style section
+  * parse prop section
 * semantic pass
-  *  class instantiation
-  *  applying prop and style to view
+  * class instantiation
+  * applying prop and style to view
+  * exposing events to lua
 * lua binding
   * fix cfunction argument validation
   * reimplement metatable for userdata
