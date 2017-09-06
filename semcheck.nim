@@ -263,7 +263,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
           if choiceMode:
             return lay.emptyNode
           else:
-            lay.sourceError(errWrongRelation, n, n.ident)
+            lay.sourceError(errRelationNotFound, n, n.ident, lay.lastView.name)
         result = lay.viewTbl[view]
       else:
         lay.sourceError(errUndefinedRel, n, n.ident)
@@ -479,13 +479,34 @@ proc termOpDiv(lay: Layout, a, b, op: Node): Node =
     lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, "'/'", b.kind)
 
-proc termOp(lay: Layout, a, b, op: Node, id: SpecialWords): Node =
+proc binaryTermOp(lay: Layout, a, b, op: Node, id: SpecialWords): Node =
   case id
   of wPlus:  result = lay.termOpPlus(a, b, op)
   of wMinus: result = lay.termOpMinus(a, b, op)
   of wMul:   result = lay.termOpMul(a, b, op)
   of wDiv:   result = lay.termOpDiv(a, b, op)
-  else: internalError(lay, errUnknownOpr, id)
+  else: internalError(lay, errUnknownBinaryOpr, id)
+
+proc termPrefixMinus(lay: Layout, operand, op: Node): Node =
+  case operand.kind
+  of numberNode:
+    result = newNodeI(nkFloat, operand.lineInfo)
+    result.floatVal = -operand.toNumber()
+  of nkConstVar:
+    result = newNodeI(nkConstTerm, operand.lineInfo)
+    result.term = -operand.variable
+  of nkConstTerm:
+    result = newNodeI(nkConstTerm, operand.lineInfo)
+    result.term = -operand.term
+  of nkConstExpr:
+    result = newNodeI(nkConstExpr, operand.lineInfo)
+    result.expression = -operand.expression
+  else: internalError(lay, errUnknownPrefix, "'-'", operand.kind)
+
+proc unaryTermOp(lay: Layout, operand, op: Node, id: SpecialWords): Node =
+  case id
+  of wMinus: result = lay.termPrefixMinus(operand, op)
+  else: internalError(lay, errUnknownPrefixOpr, id)
 
 proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
   case n.kind
@@ -505,14 +526,14 @@ proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
   of nkInfix:
     assert(n.len == 3)
     let id = toKeyWord(n[0])
-    if id notin constTermOp:
-      lay.sourceError(errUnknownOpr, n[0], n[0].ident.s)
+    if id notin constBinaryTermOp:
+      lay.sourceError(errIllegalBinaryOpr, n[0], n[0].ident)
     let lhs = lay.secConstExpr(n[1], choiceMode)
     let rhs = lay.secConstExpr(n[2], choiceMode)
     if choiceMode:
       if lhs.kind == nkEmpty or lhs.kind == nkEmpty:
         return lay.emptyNode
-    result = lay.termOp(lhs, rhs, n[0], id)
+    result = lay.binaryTermOp(lhs, rhs, n[0], id)
   of nkString:
     lay.sourceError(errStringNotAllowed, n)
   of nkChoice:
@@ -520,10 +541,22 @@ proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
       result = lay.secConstExpr(cc, true)
       if result.kind != nkEmpty: return result
     lay.sourceError(errNoValidBranch, n)
+  of nkPrefix:
+    assert(n.len == 2)
+    let id = toKeyWord(n[0])
+    if id notin constUnaryTermOp:
+      lay.sourceError(errIllegalPrefixOpr, n[0], n[0].ident)
+    let operand = lay.secConstExpr(n[1], choiceMode)
+    if choiceMode and operand.kind == nkEmpty:
+      return lay.emptyNode
+    result = lay.unaryTermOp(operand, n[0], id)
+  of nkConstVar, nkConstExpr, nkConstTerm:
+    # already processed, just return it
+    result = n
   else:
     internalError(lay, errUnknownNode, n.kind)
 
-proc constOpEQ(lay: Layout, a, b: Node) =
+proc constOpEQ(lay: Layout, a, b, op: Node) =
   if a.kind in numberNode and b.kind == nkConstVar:
     lay.solver.addConstraint(a.toNumber() == b.variable)
   elif a.kind in numberNode and b.kind == nkConstExpr:
@@ -554,9 +587,11 @@ proc constOpEQ(lay: Layout, a, b: Node) =
     lay.solver.addConstraint(a.expression == b.term)
   elif a.kind == nkConstExpr and b.kind == nkConstExpr:
     lay.solver.addConstraint(a.expression == b.expression)
+  elif a.kind in numberNode and b.kind in numberNode:
+    lay.sourceError(errIllegalOperation, op, a.kind, "=", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, '=', b.kind)
 
-proc constOpLE(lay: Layout, a, b: Node) =
+proc constOpLE(lay: Layout, a, b, op: Node) =
   if a.kind in numberNode and b.kind == nkConstVar:
     lay.solver.addConstraint(a.toNumber() <= b.variable)
   elif a.kind in numberNode and b.kind == nkConstExpr:
@@ -587,9 +622,11 @@ proc constOpLE(lay: Layout, a, b: Node) =
     lay.solver.addConstraint(a.expression <= b.term)
   elif a.kind == nkConstExpr and b.kind == nkConstExpr:
     lay.solver.addConstraint(a.expression <= b.expression)
+  elif a.kind in numberNode and b.kind in numberNode:
+    lay.sourceError(errIllegalOperation, op, a.kind, "<=", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, "<=", b.kind)
 
-proc constOpGE(lay: Layout, a, b: Node) =
+proc constOpGE(lay: Layout, a, b, op: Node) =
   if a.kind in numberNode and b.kind == nkConstVar:
     lay.solver.addConstraint(a.toNumber() >= b.variable)
   elif a.kind in numberNode and b.kind == nkConstExpr:
@@ -620,14 +657,16 @@ proc constOpGE(lay: Layout, a, b: Node) =
     lay.solver.addConstraint(a.expression >= b.term)
   elif a.kind == nkConstExpr and b.kind == nkConstExpr:
     lay.solver.addConstraint(a.expression >= b.expression)
+  elif a.kind in numberNode and b.kind in numberNode:
+    lay.sourceError(errIllegalOperation, op, a.kind, "<=", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, ">=", b.kind)
 
-proc constOp(lay: Layout, a, b: Node, id: SpecialWords) =
+proc constOp(lay: Layout, a, b, op: Node, id: SpecialWords) =
   case id
-  of wEquals: lay.constOpEQ(a, b)
-  of wGreaterOrEqual: lay.constOpGE(a, b)
-  of wLessOrEqual: lay.constOpLE(a, b)
-  else: internalError(lay, errUnknownOpr, id)
+  of wEquals: lay.constOpEQ(a, b, op)
+  of wGreaterOrEqual: lay.constOpGE(a, b, op)
+  of wLessOrEqual: lay.constOpLE(a, b, op)
+  else: internalError(lay, errUnknownEqualityOpr, id)
 
 proc secConstList(lay: Layout, n: Node) =
   assert(n.kind == nkConstList)
@@ -642,7 +681,7 @@ proc secConstList(lay: Layout, n: Node) =
       assert(opId in constOpr)
       cc.sons[i] = lay.secConstExpr(lhs)
       cc.sons[i+2] = lay.secConstExpr(rhs)
-      lay.constOp(cc.sons[i], cc.sons[i+2], opId)
+      lay.constOp(cc.sons[i], cc.sons[i+2], op, opId)
 
 proc secEventList(lay: Layout, n: Node) =
   discard
@@ -704,18 +743,11 @@ proc luaBinding(lay: Layout) =
     idx(get)
   #nimLuaOptions(nloDebug, false)
 
-  #type
-    #abc = object of RootObj
-    #apple = object of abc
-    
   L.bindObject(Layout):
     getRoot
     getRoot -> "_get_root"
     id(get)
 
-  #L.bindObject(apple):
-    #id(get)
-  
   # store Layout reference
   L.pushLightUserData(cast[pointer](layoutSingleton)) # push key
   L.pushLightUserData(cast[pointer](lay)) # push value
@@ -740,15 +772,11 @@ proc luaBinding(lay: Layout) =
   L.setGlobal("getLayout")
 
   lay.context.executeLua("apple.lua")
-  
-proc semCheck*(lay: Layout, n: Node) =  
+
+proc semCheck*(lay: Layout, n: Node) =
   lay.semTopLevel(n)
   lay.secTopLevel(n)
 
   #echo n.treeRepr
   lay.solver.updateVariables()
-
-  #for v in keys(lay.viewTbl):
-    #v.print
   lay.luaBinding()
-  echo lay.root.name

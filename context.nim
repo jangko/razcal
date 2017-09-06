@@ -73,13 +73,19 @@ type
     errUnknownProp
     errUndefinedRel
     errUnknownRel
-    errWrongRelation
+    errRelationNotFound
     errWrongRelationIndex
-    errUnknownOpr
+    errIllegalBinaryOpr
+    errUnknownBinaryOpr
     errUnknownOperation
     errIllegalOperation
     errStringNotAllowed
     errNoValidBranch
+    errIllegalPrefixOpr
+    errUnknownPrefixOpr
+    errUnknownPrefix
+    errIllegalPrefix
+    errUnknownEqualityOpr
 
     # other's errors
     errCannotOpenFile
@@ -125,13 +131,19 @@ const
     errUnknownProp: "`$1` is an unknown prop",
     errUndefinedRel: "`$1` is an undefined relation",
     errUnknownRel: "`$1` is an unknown relation",
-    errWrongRelation: "relation not found: $1",
+    errRelationNotFound: "relation not found: '$1' is not available for '$2'",
     errWrongRelationIndex: "relation at index $1 not found",
-    errUnknownOpr: "unknown operator: '$1'",
+    errIllegalBinaryOpr: "illegal binary operator: '$1'",
+    errUnknownBinaryOpr: "unknown binary operator: '$1'",
     errUnknownOperation: "unknown operation $1 $2 $3",
     errIllegalOperation: "illegal operation $1 $2 $3",
     errStringNotAllowed: "string not allowed here",
     errNoValidBranch: "no valid branch of choices",
+    errIllegalPrefixOpr: "illegal prefix operator: '$1'",
+    errUnknownPrefixOpr: "unknown prefix operator: '$1'",
+    errUnknownPrefix: "unknown prefix operation: '$1' $2",
+    errIllegalPrefix: "illegal prefix operation: '$1' $2",
+    errUnknownEqualityOpr: "unknown constraint equality operator: '$1'",
 
     # other errors
     errCannotOpenFile: "cannot open file: $1",

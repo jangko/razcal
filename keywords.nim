@@ -79,4 +79,5 @@ const
   constRel* = {wThis, wParent, wChild, wPrev, wNext}
   constProp* = {wLeft, wRight, wTop, wBottom,
     wWidth, wHeight, wCenterX, wCenterY}
-  constTermOp* = {wPlus, wMinus, wMul, wDiv}
+  constBinaryTermOp* = {wPlus, wMinus, wMul, wDiv}
+  constUnaryTermOp* = {wMinus}
