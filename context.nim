@@ -69,8 +69,8 @@ type
     errDuplicateClass
     errClassNotFound
     errParamCountNotMatch
-    errUndefinedProp
-    errUnknownProp
+    errUndefinedVar
+    errUnknownVar
     errUndefinedRel
     errUnknownRel
     errRelationNotFound
@@ -86,6 +86,10 @@ type
     errUnknownPrefix
     errIllegalPrefix
     errUnknownEqualityOpr
+    errUndefinedProp
+    errUnknownProp
+    errUndefinedEvent
+    errUnknownEvent
 
     # other's errors
     errCannotOpenFile
@@ -127,8 +131,8 @@ const
     errDuplicateClass: "duplicate class not allowed: '$1', the other one is here: $2",
     errClassNotFound: "class '$1' not found",
     errParamCountNotMatch: "expected $1 param(s) but got $2 param(s)",
-    errUndefinedProp: "`$1` is an undefined property",
-    errUnknownProp: "`$1` is an unknown prop",
+    errUndefinedVar: "`$1` is an undefined constraint variable",
+    errUnknownVar: "`$1` is an unknown constraint variable",
     errUndefinedRel: "`$1` is an undefined relation",
     errUnknownRel: "`$1` is an unknown relation",
     errRelationNotFound: "relation not found: '$1' is not available for '$2'",
@@ -144,6 +148,10 @@ const
     errUnknownPrefix: "unknown prefix operation: '$1' $2",
     errIllegalPrefix: "illegal prefix operation: '$1' $2",
     errUnknownEqualityOpr: "unknown constraint equality operator: '$1'",
+    errUndefinedProp: "`$1` is an undefined view property",
+    errUnknownProp: "`$1` is an unknown view property",
+    errUndefinedEvent: "`$1` is an undefined view event",
+    errUnknownEvent: "`$1` is an unknown view event",
 
     # other errors
     errCannotOpenFile: "cannot open file: $1",

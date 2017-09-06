@@ -92,7 +92,7 @@ type
   TCFunction* = proc (L: PState): cint{.cdecl.}
 
   #* functions that read/write blocks when loading/dumping Lua chunks
-  TReader* = proc (L: PState; ud: pointer; sz: ptr csize): cstring {.cdecl.}
+  TReader* = proc (L: PState; ud: pointer; sz: var csize): cstring {.cdecl.}
   TWriter* = proc (L: PState; p: pointer; sz: csize; ud: pointer): cint {.cdecl.}
 
   #* prototype for memory-allocation functions
@@ -526,7 +526,7 @@ proc testudata*(L: PState; ud: cint; tname: cstring): pointer {.iluaL.}
 proc checkudata*(L: PState; ud: cint; tname: cstring): pointer {.iluaL.}
 proc where*(L: PState; lvl: cint) {.iluaL.}
 proc error*(L: PState; fmt: cstring): cint {.varargs, iluaL.}
-proc checkoption*(L: PState; arg: cint; def: cstring; lst: ptr cstring): cint {.iluaL.}
+proc checkoption*(L: PState; arg: cint; def: cstring; lst: var cstring): cint {.iluaL.}
 proc fileresult*(L: PState; stat: cint; fname: cstring): cint {.iluaL.}
 proc execresult*(L: PState; stat: cint): cint {.iluaL.}
 

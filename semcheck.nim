@@ -8,11 +8,18 @@ type
     classTbl: Table[Ident, Node] # string to SymbolNode.skClass
     solver: kiwi.Solver          # constraint solver
     context: Context             # ref to app global context
-    lastView: View               # last processed parent view
+    lastView: View               # last processed parent view/current View
     emptyNode: Node
 
 template hash(view: View): Hash =
   hash(cast[int](view))
+
+proc toKeyWord(n: Node): SpecialWords =
+  assert(n.kind == nkIdent)
+  if n.ident.id > 0 and n.ident.id <= ord(high(SpecialWords)):
+    result = SpecialWords(n.ident.id)
+  else:
+    result = wInvalid
 
 proc createView(lay: Layout, n: Node): Node =
   var view = lay.lastView.newView(n.ident)
@@ -117,10 +124,20 @@ proc semConstList(lay: Layout, n: Node) =
   discard
 
 proc semEventList(lay: Layout, n: Node) =
-  discard
+  for ev in n.sons:
+    assert(ev.kind == nkEvent)
+    assert(ev[0].kind == nkIdent)
+    let id = toKeyword(ev[0])
+    if id notin validEvents:
+      lay.sourceError(errUndefinedEvent, ev[0], ev[0].ident)
 
 proc semPropList(lay: Layout, n: Node) =
-  discard
+  for prop in n.sons:
+    assert(prop.kind == nkProp)
+    assert(prop[0].kind == nkIdent)
+    let id = toKeyword(prop[0])
+    if id notin validProps:
+      lay.sourceError(errUndefinedProp, prop[0], prop[0].ident)
 
 proc semViewBody(lay: Layout, n: Node): Node =
   assert(n.kind in {nkStmtList, nkEmpty})
@@ -147,6 +164,10 @@ proc semView(lay: Layout, n: Node) =
     let son = n[0].sons[1]
     if son.kind == nkIdent: lastIdent = son
   n[0] = lay.semViewName(n[0], lastIdent)
+
+  # at this point, the view already create
+  # and n[0] already replaced with a symbolNode
+  lay.lastView = n[0].sym.view
   n[1] = lay.semViewClass(n[1])
   n[2] = lay.semViewBody(n[2])
 
@@ -193,13 +214,6 @@ proc secViewClass(lay: Layout, n: Node) =
       assert(classParams.kind == nkClassParams)
       if params.len != classParams.len:
         lay.sourceError(errParamCountNotMatch, params, classParams.len, params.len)
-
-proc toKeyWord(n: Node): SpecialWords =
-  assert(n.kind == nkIdent)
-  if n.ident.id > 0 and n.ident.id <= ord(high(SpecialWords)):
-    result = SpecialWords(n.ident.id)
-  else:
-    result = wInvalid
 
 proc selectViewProp(lay: Layout, view: View, id: SpecialWords): Variable =
   case id
@@ -255,7 +269,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
         result = newNodeI(nkConstVar, n.lineInfo)
         result.variable = lay.selectViewProp(lay.lastView, id)
       else:
-        lay.sourceError(errUndefinedProp, n, n.ident)
+        lay.sourceError(errUndefinedVar, n, n.ident)
     else:
       if id in constRel:
         let view = lay.selectViewRel(lay.lastView, id)
@@ -516,7 +530,7 @@ proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
       result = newNodeI(nkConstVar, n.lineInfo)
       result.variable = lay.selectViewProp(lay.lastView, id)
     else:
-      lay.sourceError(errUndefinedProp, n, n.ident)
+      lay.sourceError(errUndefinedVar, n, n.ident)
   of nkUint:
     result = n
   of nkDotCall:
@@ -771,12 +785,25 @@ proc luaBinding(lay: Layout) =
   L.pushCfunction(layoutProxy)
   L.setGlobal("getLayout")
 
-  lay.context.executeLua("apple.lua")
-
 proc semCheck*(lay: Layout, n: Node) =
+  lay.luaBinding()
+
+  # semcheck first pass
+  # collecting symbols
+  # resolve view hierarchy
+  # caching classes and styles
+  # register prop
+  # register event
   lay.semTopLevel(n)
+
+  # semcheck second pass
+  # create constraint and add it to solver
+  # instantiate classes
+  # applying prop
+  # applying style
+  # attaching event handler to view
   lay.secTopLevel(n)
 
   #echo n.treeRepr
   lay.solver.updateVariables()
-  lay.luaBinding()
+  lay.context.executeLua("apple.lua")

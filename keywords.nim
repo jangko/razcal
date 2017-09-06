@@ -77,7 +77,10 @@ const
 
   constOpr* = {wEquals, wGreaterOrEqual, wLessOrEqual}
   constRel* = {wThis, wParent, wChild, wPrev, wNext}
-  constProp* = {wLeft, wRight, wTop, wBottom,
-    wWidth, wHeight, wCenterX, wCenterY}
+  constProp* = {wLeft..wCenterY}
   constBinaryTermOp* = {wPlus, wMinus, wMul, wDiv}
   constUnaryTermOp* = {wMinus}
+  
+  validEvents* = {wClick..wOnDrop}
+  validProps* = {wContent..wIcon}
+  
