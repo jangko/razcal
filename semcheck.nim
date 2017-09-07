@@ -778,7 +778,7 @@ proc luaBinding(lay: Layout) =
     ret.ud = cast[Layout](L.toUserData(-1)) # convert to layout
     L.pop(1) # remove userdata
     GC_ref(ret.ud)
-    L.getMetatable(mtName)
+    L.nimGetMetaTable(mtName)
     discard L.setMetatable(-2)
     return 1
 

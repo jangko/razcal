@@ -603,6 +603,15 @@ proc isRefType(s: NimNode): bool {.compileTime.} =
   if n[2].kind != nnkRefTy: return false
   result = true
 
+proc isObjectType(s: NimNode): bool {.compileTime.} =
+  let n = getImpl(s.symbol)
+  if n.kind != nnkTypeDef: return false
+  if n[2].kind != nnkObjectTy: return false
+  result = true
+
+proc isRefOrObjectType(s: NimNode): bool {.compileTime.} =
+  result = isRefType(s) or isObjectType(s)
+
 proc hasName(name: string): bool {.compileTime.} =
   for n in nameList:
     if n == name: return true
@@ -618,10 +627,11 @@ proc registerObject(subject: NimNode): string {.compileTime.} =
     if nameList[i] == prefixedName:
       return name & $i
 
-  let subjectName = name & $nameList.len
+  let subjectID = $nameList.len
+  let subjectName = name & subjectID
   nameList.add prefixedName
   var glue = "const\n"
-  glue.add "  luaL_$1 = \"luaL_$1\"\n" % [subjectName]
+  glue.add "  luaL_$1 = 0xDEAF+$2\n" % [subjectName, subjectID]
   glue.add "type\n"
   glue.add "  luaL_$1Proxy = object\n" % [subjectName]
   glue.add "    ud: $1\n" % [name]
@@ -629,7 +639,7 @@ proc registerObject(subject: NimNode): string {.compileTime.} =
   result = subjectName
 
 proc checkUD(s, n: string): string {.compileTime.} =
-  result = "cast[ptr luaL_$1Proxy](L.checkUData($2.cint, luaL_$1))\n" % [s, n]
+  result = "cast[ptr luaL_$1Proxy](L.nimCheckUData($2.cint, luaL_$1, \"$1\"))\n" % [s, n]
 
 proc newUD(s: string): string {.compileTime.} =
   result = "cast[ptr luaL_$1Proxy](L.newUserData(sizeof(luaL_$1Proxy)))\n" % [s]
@@ -847,6 +857,36 @@ proc checkNimChar*(L: PState, idx: cint): char =
   if L.isInteger(idx) != 0: result = L.toInteger(idx).char
   else: result = chr(0)
 
+proc nimNewMetaTable*(L: PState, key: int): int =
+  L.pushLightUserData(cast[pointer](key))
+  L.rawGet(LUA_REGISTRYINDEX)
+  if not L.isNil(-1): # name already in use?
+    return 0 #leave previous value on top, but return 0
+
+  L.pop(1)
+  L.newTable() # create metatable
+  L.pushLightUserData(cast[pointer](key))
+  L.pushValue(-2)
+  L.rawSet(LUA_REGISTRYINDEX)
+  result = 1
+
+proc nimGetMetaTable*(L: PState, key: int) =
+  L.pushLightUserData(cast[pointer](key))
+  L.rawGet(LUA_REGISTRYINDEX)
+
+proc nimCheckUData*(L: PState, idx, key: int, name: string): pointer =
+  let p = L.toUserData(idx.cint)
+  if p != nil: #value is a userdata?
+    if L.getMetaTable(idx.cint) != 0.cint: #does it have a metatable?
+      L.pushLightUserData(cast[pointer](key))
+      L.rawGet(LUA_REGISTRYINDEX) # get correct metatable
+      if L.rawEqual(-1, -2) != 0.cint: # does it have the correct mt?
+        L.pop(2) # remove both metatables
+        return p
+
+  # else error
+  result = nil
+
 let
   intTypes {.compileTime.} = ["int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64"]
   floatTypes {.compileTime.} = ["float", "float32", "float64"]
@@ -905,7 +945,7 @@ proc constructBasicRet(mType: NimNode, arg, indent, procName: string): string {.
 
   result = ""
 
-proc constructArg(ctx: proxyDesc, mType: NimNode, i: int, procName: string): string {.compileTime.}
+proc constructArg(ctx: proxyDesc, mType: NimNode, i: int, procName: string, needCheck: var string): string {.compileTime.}
 
 proc argAttr(mType: NimNode): string {.compileTime.} =
   if mType.kind == nnkSym:
@@ -940,6 +980,7 @@ proc stackDump*(L: PState) =
 
 proc registerArrayCheck(ctx: proxyDesc, s: NimNode, lo, hi: int, procName: string): string {.compileTime.} =
   let name = "checkArray$1$2$3" % [$s, $lo, $hi]
+  var needCheck = ""
   if not hasName(name):
     setName(name)
     var glue = "proc $1(L: PState, idx: int): array[$2..$3, $4] =\n" % [name, $lo, $hi, $s]
@@ -948,8 +989,12 @@ proc registerArrayCheck(ctx: proxyDesc, s: NimNode, lo, hi: int, procName: strin
     glue.add "  L.pushNil()\n"
     glue.add "  var i = 0\n"
     glue.add "  while L.next(idx.cint) != 0:\n"
-    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName)
-    glue.add "    result[i+$1] = tmp$2\n" % [$lo, argAttr(s)]
+    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName, needCheck)
+    if needCheck.len != 0:
+      glue.add(("    " & needCheck) % ["tmp"])
+      glue.add "      result[i+$1] = tmp$2\n" % [$lo, argAttr(s)]
+    else:
+      glue.add "    result[i+$1] = tmp$2\n" % [$lo, argAttr(s)]
     glue.add "    L.pop(1.cint)\n"
     glue.add "    inc i\n"
     glue.add "    if i >= len: break\n"
@@ -958,6 +1003,7 @@ proc registerArrayCheck(ctx: proxyDesc, s: NimNode, lo, hi: int, procName: strin
 
 proc registerArrayCheck(ctx: proxyDesc, s: NimNode, hi: int, procName: string): string {.compileTime.} =
   let name = "checkArray$1$2" % [$s, $hi]
+  var needCheck = ""
   if not hasName(name):
     setName(name)
     var glue = "proc $1(L: PState, idx: int): array[$2, $3] =\n" % [name, $hi, $s]
@@ -966,8 +1012,12 @@ proc registerArrayCheck(ctx: proxyDesc, s: NimNode, hi: int, procName: string): 
     glue.add "  L.pushNil()\n"
     glue.add "  var i = 0\n"
     glue.add "  while L.next(idx.cint) != 0:\n"
-    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName)
-    glue.add "    result[i] = tmp$1\n" % [argAttr(s)]
+    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName, needCheck)
+    if needCheck.len != 0:
+      glue.add(("    " & needCheck) % ["tmp"])
+      glue.add "      result[i] = tmp$1\n" % [argAttr(s)]
+    else:
+      glue.add "    result[i] = tmp$1\n" % [argAttr(s)]
     glue.add "    L.pop(1.cint)\n"
     glue.add "    inc i\n"
     glue.add "    if i >= len: break\n"
@@ -977,6 +1027,7 @@ proc registerArrayCheck(ctx: proxyDesc, s: NimNode, hi: int, procName: string): 
 
 proc registerArrayCheck(ctx: proxyDesc, s: NimNode, id: string, procName: string): string {.compileTime.} =
   let name = "checkArray$1$2" % [$s, id]
+  var needCheck = ""
   if not hasName(name):
     setName(name)
     var glue = "proc $1(L: PState, idx: int): array[$2, $3] =\n" % [name, id, $s]
@@ -985,8 +1036,12 @@ proc registerArrayCheck(ctx: proxyDesc, s: NimNode, id: string, procName: string
     glue.add "  L.pushNil()\n"
     glue.add "  var i = 0\n"
     glue.add "  while L.next(idx.cint) != 0:\n"
-    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName)
-    glue.add "    result[i] = tmp$1\n" % [argAttr(s)]
+    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName, needCheck)
+    if needCheck.len != 0:
+      glue.add(("    " & needCheck) % ["tmp"])
+      glue.add "      result[i] = tmp$1\n" % [argAttr(s)]
+    else:
+      glue.add "    result[i] = tmp$1\n" % [argAttr(s)]
     glue.add "    L.pop(1.cint)\n"
     glue.add "    inc i\n"
     glue.add "    if i >= len: break\n"
@@ -1012,7 +1067,8 @@ proc genArrayArg(ctx: proxyDesc, nType: NimNode, i: int, procName: string): stri
 
   let argType = nType[2]
 
-  let res = constructArg(ctx, argType, -1, procName)
+  var needCheck = ""
+  let res = constructArg(ctx, argType, -1, procName, needCheck)
   let checkArray = if mode == 1:
       registerArrayCheck(ctx, argType, lo, hi, procName)
     elif mode == 2:
@@ -1028,6 +1084,7 @@ proc genArrayArg(ctx: proxyDesc, nType: NimNode, i: int, procName: string): stri
 
 proc registerSetCheck(ctx: proxyDesc, s: NimNode, procName: string): string {.compileTime.} =
   let name = "checkSet$1" % [$s]
+  var needCheck = ""
   if not hasName(name):
     setName(name)
     var glue = "proc $1(L: PState, idx: int): set[$2] =\n" % [name, $s]
@@ -1036,8 +1093,12 @@ proc registerSetCheck(ctx: proxyDesc, s: NimNode, procName: string): string {.co
     glue.add "  L.pushNil()\n"
     glue.add "  var i = 0\n"
     glue.add "  while L.next(idx.cint) != 0:\n"
-    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName)
-    glue.add "    result.incl(tmp$1)\n" % [argAttr(s)]
+    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName, needCheck)
+    if needCheck.len != 0:
+      glue.add(("    " & needCheck) % ["tmp"])
+      glue.add "      result.incl(tmp$1)\n" % [argAttr(s)]
+    else:
+      glue.add "    result.incl(tmp$1)\n" % [argAttr(s)]
     glue.add "    L.pop(1.cint)\n"
     glue.add "    inc i\n"
     glue.add "    if i >= len: break\n"
@@ -1047,7 +1108,8 @@ proc registerSetCheck(ctx: proxyDesc, s: NimNode, procName: string): string {.co
 
 proc genSetArg(ctx: proxyDesc, nType: NimNode, i: int, procName: string): string {.compileTime.} =
   let argType = nType[1]
-  let res = constructArg(ctx, argType, -1, procName)
+  var needCheck = ""
+  let res = constructArg(ctx, argType, -1, procName, needCheck)
   let checkSet = registerSetCheck(ctx, argType, procName)
   var glue = "L.$1($2)\n" % [checkSet, $i]
   if res != "": return glue
@@ -1056,6 +1118,7 @@ proc genSetArg(ctx: proxyDesc, nType: NimNode, i: int, procName: string): string
 
 proc registerSequenceCheck(ctx: proxyDesc, s: NimNode, procName: string): string {.compileTime.} =
   let name = "checkSequence$1" % [$s]
+  var needCheck = ""
   if not hasName(name):
     setName(name)
     var glue = "proc $1(L: PState, idx: int): seq[$2] =\n" % [name, $s]
@@ -1065,8 +1128,12 @@ proc registerSequenceCheck(ctx: proxyDesc, s: NimNode, procName: string): string
     glue.add "  result = newSeq[$1](len)\n" % [$s]
     glue.add "  var i = 0\n"
     glue.add "  while L.next(idx.cint) != 0:\n"
-    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName)
-    glue.add "    result[i] = tmp$1\n" % [argAttr(s)]
+    glue.add "    let tmp = " & constructArg(ctx, s, -1, procName, needCheck)
+    if needCheck.len != 0:
+      glue.add(("    " & needCheck) % ["tmp"])
+      glue.add "      result[i] = tmp$1\n" % [argAttr(s)]
+    else:
+      glue.add "    result[i] = tmp$1\n" % [argAttr(s)]
     glue.add "    L.pop(1.cint)\n"
     glue.add "    inc i\n"
     glue.add "    if i >= len: break\n"
@@ -1076,7 +1143,8 @@ proc registerSequenceCheck(ctx: proxyDesc, s: NimNode, procName: string): string
 
 proc genSequenceArg(ctx: proxyDesc, nType: NimNode, i: int, procName: string): string {.compileTime.} =
   let argType = nType[1]
-  let res = constructArg(ctx, argType, -1, procName)
+  var needCheck = ""
+  let res = constructArg(ctx, argType, -1, procName, needCheck)
   let checkSeq = registerSequenceCheck(ctx, argType, procName)
   var glue = "L.$1($2)\n" % [checkSeq, $i]
   if res != "": return glue
@@ -1102,10 +1170,15 @@ proc registerTupleCheck(ctx: proxyDesc, nType: NimNode, procName: string): strin
     for x in argList:
       glue.add "  L.pushLiteral(\"$1\")\n" % [$x.mName]
       glue.add "  L.getTable(idx.cint)\n"
-      let res = constructArg(ctx, x.mType, -1, procName)
+      var needCheck = ""
+      let res = constructArg(ctx, x.mType, -1, procName, needCheck)
       if res == "":
         error(procName & ": unknown tuple param type: " & $x.mType.kind & "\n" & x.mType.treeRepr)
-      glue.add "  result.$1 = $2"  % [$x.mName, res]
+      if needCheck.len != 0:
+        glue.add(("    " & needCheck) % [res])
+        glue.add "    result.$1 = $2"  % [$x.mName, res]
+      else:
+        glue.add "  result.$1 = $2"  % [$x.mName, res]
     glue.add "  L.pop($1)\n" % [$argList.len]
     gContext.add glue
 
@@ -1116,17 +1189,18 @@ proc genTupleArg(ctx: proxyDesc, nType: NimNode, i: int, procName: string): stri
   var glue = "L.$1($2)\n" % [checkTup, $i]
   result = glue
 
-proc constructComplexArg(ctx: proxyDesc, mType: NimNode, i: int, procName: string): string {.compileTime.} =
+proc constructComplexArg(ctx: proxyDesc, mType: NimNode, i: int, procName: string, needCheck: var string): string {.compileTime.} =
   if mType.kind == nnkSym:
     let nType = getImpl(mType.symbol)[2]
     if nType.kind in {nnkObjectTy, nnkRefTy}:
+      needCheck = "if not $1.isNil:\n"
       return checkUD(registerObject(mType), $i)
 
     if nType.kind == nnkDistinctTy:
-      return constructArg(ctx, nType[0], i, procName)
+      return constructArg(ctx, nType[0], i, procName, needcheck)
 
     if nType.kind == nnkEnumTy:
-      return constructArg(ctx, bindSym"int", i, procName)
+      return constructArg(ctx, bindSym"int", i, procName, needCheck)
 
     if nType.kind == nnkTupleTy:
       return genTupleArg(ctx, nType, i, procName)
@@ -1169,6 +1243,7 @@ proc constructComplexArg(ctx: proxyDesc, mType: NimNode, i: int, procName: strin
   if mType.kind == nnkVarTy:
     let nType = getType(mType[0])
     if nType.kind in {nnkObjectTy, nnkRefTy}:
+      needCheck = "if not $1.isNil:\n"
       return checkUD(registerObject(mType[0]), $i)
     if nType.kind == nnkSym:
       outValList.add constructBasicRet(nType, "arg" & $(i-1), "", procName)
@@ -1303,7 +1378,7 @@ proc constructComplexRet(mType: NimNode, procCall, indent, procName: string): st
       var glue = indent & "var proxyret = " & newUD(subjectName)
       glue.add indent & "proxyret.ud = $1\n" % [procCall]
       if isRefType(mType): glue.add indent & "GC_ref(proxyret.ud)\n"
-      glue.add indent & "L.getMetatable(luaL_$1)\n" % [subjectName]
+      glue.add indent & "L.nimGetMetatable(luaL_$1)\n" % [subjectName]
       glue.add indent & "discard L.setMetatable(-2)\n"
       return glue
 
@@ -1344,20 +1419,20 @@ proc constructComplexRet(mType: NimNode, procCall, indent, procName: string): st
       let subjectName = registerObject(mType)
       var glue = indent & "var proxy = " & newUD(subjectName)
       glue.add indent & "proxy.ud = $1\n" % [procCall]
-      glue.add indent & "L.getMetatable(luaL_$1)\n" % [subjectName]
+      glue.add indent & "L.nimGetMetatable(luaL_$1)\n" % [subjectName]
       glue.add indent & "discard L.setMetatable(-2)\n"
       return glue
 
   error(procName & ": unknown ret type: " & $mType.kind & "\n" & mType.treeRepr)
   result = ""
 
-proc constructArg(ctx: proxyDesc, mType: NimNode, i: int, procName: string): string =
+proc constructArg(ctx: proxyDesc, mType: NimNode, i: int, procName: string, needCheck: var string): string =
   case mType.kind:
   of nnkSym:
     result = constructBasicArg(mType, i, procName)
-    if result == "": result = constructComplexArg(ctx, mType, i, procName)
+    if result == "": result = constructComplexArg(ctx, mType, i, procName, needCheck)
   else:
-    result = constructComplexArg(ctx, mType, i, procName)
+    result = constructComplexArg(ctx, mType, i, procName, needCheck)
 
 proc constructRet(retType: NimNode, procCall, indent, procName: string): string =
   case retType.kind:
@@ -1382,9 +1457,12 @@ proc genOvCallSingle(ctx: proxyDesc, ovp: ovProcElem, procName, indent: string, 
     glue.add getClosureEnv("L", procName, ovIdx)
 
   for i in start..ovp.params.len-1:
+    var needCheck = ""
     let param = ovp.params[i]
     let pType = if param.mType.kind != nnkEmpty: param.mType else: findSymbol(ctx, param.mVal)
-    glue.add indent & "  var arg" & $i & " = " & constructArg(ctx, pType, i + 1, procName)
+    glue.add indent & "  var arg" & $i & " = " & constructArg(ctx, pType, i + 1, procName, needCheck)
+    if needCheck.len != 0:
+      glue.add(indent & "  if arg" & $i & ".isNil: return 0\n")
     glueParam.add "arg" & $i & argAttr(param.mType)
     if i < ovp.params.len-1: glueParam.add ", "
 
@@ -1554,12 +1632,17 @@ proc genOvCallMany(ctx: proxyDesc, ovp: seq[ovProcElem], procName: string, flags
 proc genOvCall(ctx: proxyDesc, ovp: seq[ovProc], procName: string, flags: ovFlags, bd: bindDesc): string {.compileTime.} =
   let constructorMatter = if ovfConstructor in flags: " - 1" else: ""
   var glue = "  let numArgs = L.getTop().int$1\n" % [constructorMatter]
-  for k in ovp:
-    glue.add "  if numArgs == $1:\n" % [$k.numArgs] #first level of ov proc resolution
+  for i in 0.. <ovp.len:
+    let k = ovp[i]
+    let prefix = if i == 0: "" else: "el"
+    glue.add "  $1if numArgs == $2:\n" % [prefix, $k.numArgs] #first level of ov proc resolution
     if k.procs.len == 1:
       glue.add genOvCallSingle(ctx, k.procs[0], procName, "  ", flags, bd)
     else:
       glue.add genOvCallMany(ctx, k.procs, procName, flags, bd)
+  glue.add "  else:\n"
+  glue.add "    # error\n"
+  glue.add "    return 0\n"
   result = glue
 
 proc bindOverloadedFunction(ctx: proxyDesc, bd: bindDesc, ov: NimNode, glueProc, procName, SL: string): string {.compileTime.} =
@@ -1776,10 +1859,10 @@ proc bindSingleConstructor(ctx: proxyDesc, bd: bindDesc, n: NimNode, glueProc, p
   glue.add "  var proxy = " & newUD(subjectName)
   #always zeroed the memory if you mix gc code and unmanaged code
   #otherwise, strange things will happened
-  if isRefType(subject): glue.add "  zeroMem(proxy, sizeof(luaL_$1Proxy))\n" % [subjectName]
+  if isRefOrObjectType(subject): glue.add "  zeroMem(proxy, sizeof(luaL_$1Proxy))\n" % [subjectName]
   glue.add genOvCallSingle(ctx, newProcElem(retType, argList), procName, "", {ovfConstructor}, bd)
   if isRefType(subject): glue.add "  GC_ref(proxy.ud)\n"
-  glue.add "  L.getMetatable(luaL_$1)\n" % [subjectName]
+  glue.add "  L.nimGetMetatable(luaL_$1)\n" % [subjectName]
   glue.add "  discard L.setMetatable(-2)\n"
   glue.add "  result = 1\n"
   result = glue
@@ -1788,6 +1871,29 @@ proc eqType(a, b: NimNode): bool {.compileTime.} =
   if a.kind == nnkSym and b.kind == nnkVarTy:
     if sameType(a, b[0]): return true
   result = sameType(a, b)
+
+proc getParentName(n: NimNode, res: var seq[string]) =
+  var prefix = ""
+  var a = getImpl(n.symbol)[2]
+  if a.kind notin {nnkObjectTy, nnkRefTy}: return
+  if a.kind == nnkRefTy:
+    a = a[0]
+    prefix = "ref "
+    if a.kind != nnkObjectTy: return
+  a = a[1]
+  if a.kind != nnkOfInherit: return
+  res.add(prefix & $a[0])
+  getParentName(a[0], res)
+
+proc isDescendant(a, b: NimNode): bool {.compileTime.} =
+  if b.kind notin {nnkRefTy, nnkSym}: return false
+  let bType = if b.kind == nnkRefTy: "ref " & $b[0] else: $b
+  var parents = newSeq[string]()
+  getParentName(a, parents)
+  result = parents.contains(bType)
+
+proc eqTypeOrDescendant(a, b: NimNode): bool {.compileTime.} =
+  result = eqType(a, b) or isDescendant(a, b)
 
 proc bindOverloadedConstructor(ctx: proxyDesc, bd: bindDesc, ov: NimNode, glueProc, procName, subjectName: string): string {.compileTime.} =
   var ovl = newSeq[ovProc]()
@@ -1810,7 +1916,7 @@ proc bindOverloadedConstructor(ctx: proxyDesc, bd: bindDesc, ov: NimNode, gluePr
     let argList = paramsToArgList(params, bd.genericParams, n[2])
 
     #not a valid constructor
-    if subject.kind != retType.kind and not eqType(subject, retType): continue
+    if subject.kind != retType.kind and not eqTypeOrDescendant(subject, retType): continue
     ovl.addOvProc(retType, argList)
     inc i
 
@@ -1818,10 +1924,10 @@ proc bindOverloadedConstructor(ctx: proxyDesc, bd: bindDesc, ov: NimNode, gluePr
   glue.add "  var proxy = cast[ptr luaL_$1Proxy](L.newUserData(sizeof(luaL_$1Proxy)))\n" % [subjectName]
   #always zeroed the memory if you mix gc code and unmanaged code
   #otherwise, strange things will happened
-  if isRefType(subject): glue.add "  zeroMem(proxy, sizeof(luaL_$1Proxy))\n" % [subjectName]
+  if isRefOrObjectType(subject): glue.add "  zeroMem(proxy, sizeof(luaL_$1Proxy))\n" % [subjectName]
   glue.add genOvCall(ctx, ovl, procName, {ovfConstructor}, bd)
   if isRefType(subject): glue.add "  GC_ref(proxy.ud)\n"
-  glue.add "  L.getMetatable(luaL_$1)\n" % [subjectName]
+  glue.add "  L.nimGetMetatable(luaL_$1)\n" % [subjectName]
   glue.add "  discard L.setMetatable(-2)\n"
   glue.add "  result = 1\n"
   result = glue
@@ -1837,21 +1943,21 @@ proc bindObjectSingleMethod(ctx: proxyDesc, bd: bindDesc, n: NimNode, glueProc, 
     SL = ctx.luaCtx
     subject = ctx.subject
 
-  if eqType(subject, retType):
+  if eqTypeOrDescendant(subject, retType):
     return bindSingleConstructor(ctx, bd, n, glueProc, procName, subjectName)
 
   if argList.len == 0:
     error(procName & ": invalid object method")
 
-  if not eqType(subject, argList[0].mType):
+  if not eqTypeOrDescendant(subject, argList[0].mType):
     error("object method need object type as first param: " & procName)
 
   var glue = ""
   if bd.isClosure: glue.add addClosureEnv(SL, procName, n, bd)
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
   glue.add "  if L.gettop() != $1: return 0\n" % [$argList.len]
-  glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
   glue.add "  var proxy = " & checkUD(subjectName, "1")
+  glue.add "  if proxy.isNil: return 0\n"
   glue.add genOvCallSingle(ctx, newProcElem(retType, argList), procName, "", {ovfUseObject, ovfUseRet}, bd)
   result = glue
 
@@ -1875,12 +1981,12 @@ proc bindObjectOverloadedMethod(ctx: proxyDesc, bd: bindDesc, ov: NimNode, glueP
     let retType = replaceRet(params[0], bd.genericParams, n[2])
     let argList = paramsToArgList(params, bd.genericParams, n[2])
 
-    if eqType(subject, retType): #constructor like
+    if eqTypeOrDescendant(subject, retType): #constructor like
       ovc.add s
       continue
 
     if argList.len == 0: continue #not a valid object method
-    if not eqType(subject, argList[0].mType): continue
+    if not eqTypeOrDescendant(subject, argList[0].mType): continue
     ovl.addOvProc(retType, argList)
     inc i
 
@@ -1892,6 +1998,7 @@ proc bindObjectOverloadedMethod(ctx: proxyDesc, bd: bindDesc, ov: NimNode, glueP
   glue.add "  if L.gettop() < 1: return 0\n"
   glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
   glue.add "  var proxy = " & checkUD(subjectName, "1")
+  glue.add "  if proxy.isNil: return 0\n"
   glue.add genOvCall(ctx, ovl, procName, {ovfUseObject, ovfUseRet}, bd)
   glue.add "  discard L.error(\"$1: invalid param count\")\n" % [procName]
   glue.add "  return 0\n"
@@ -1908,22 +2015,25 @@ proc bindGetter(ctx: proxyDesc, glueProc, propName, subjectName: string, propTyp
   glue.add "  if L.gettop() != 1: return 0\n"
   glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
   glue.add "  var proxy = " & checkUD(subjectName, "1")
+  glue.add "  if proxy.isNil: return 0\n"
   glue.add constructRet(propType, procCall, "  ", procName)
   glue.add "  return 1\n"
   result = glue
 
 proc bindSetter(ctx: proxyDesc, glueProc, propName, subjectName: string, propType, subject: NimNode): string {.compileTime.} =
   var glue = ""
+  var needCheck = ""
 
   let
     procCall = "proxy.ud." & propName
     procName = $subject & "." & propName
 
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
-  glue.add "  if L.gettop() != 1: return 0\n"
+  glue.add "  if L.gettop() != 2: return 0\n"
   glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
   glue.add "  var proxy = " & checkUD(subjectName, "1")
-  glue.add "  $1 = $2" % [procCall, constructArg(ctx, propType, 2, procName)]
+  glue.add "  if proxy.isNil: return 0\n"
+  glue.add "  $1 = $2" % [procCall, constructArg(ctx, propType, 2, procName, needCheck)]
   glue.add "  return 0\n"
   result = glue
 
@@ -1956,7 +2066,7 @@ proc bindObjectImpl*(ctx: proxyDesc): NimNode {.compileTime.} =
 
   gContext.setLen 0
   let subjectName = registerObject(subject)
-  var glue = "discard $1.newMetatable(luaL_$2)\n" % [SL, subjectName]
+  var glue = "discard $1.nimNewMetatable(luaL_$2)\n" % [SL, subjectName]
   var regs = "var regs$1$2 = [\n" % [subjectName, $regsCount]
 
   for i in 0..arg.len-1:
@@ -2011,6 +2121,7 @@ proc bindObjectImpl*(ctx: proxyDesc): NimNode {.compileTime.} =
     glue.add "  if L.gettop() != 1: return 0\n"
     glue.add "  if L.luaType(1) != LUA_TUSERDATA: return 0\n"
     glue.add "  var proxy = " & checkUD(subjectName, "1")
+    glue.add "  if proxy.isNil: return 0\n"
     glue.add "  GC_unref(proxy.ud)\n"
     glue.add "  proxy.ud = nil\n"
     regs.add "  luaL_Reg(name: \"__gc\", fn: $1_destructor),\n" % [subjectName]
