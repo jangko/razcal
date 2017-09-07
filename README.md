@@ -51,10 +51,10 @@ documentation none, tutorial none.
   * applying prop and style to view
   * exposing events to lua
 * lua binding
-  * fix cfunction argument validation
-  * reimplement metatable for userdata
+  * ~fix cfunction argument validation~
+  * ~reimplement metatable for userdata~
   * add error reporting mechanism without using lua_error
-  * expose everything in layout to lua safely
+  * ~expose everything in layout to lua safely~
 * renderer
   * bring up crude renderer to design backend api
 * test suite
