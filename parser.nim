@@ -214,7 +214,8 @@ proc parseViewClassArgs(p: var Parser): Node =
   p.optInd()
   result = newNodeP(p, nkViewParam)
   while true:
-    addSon(result, parseExpr(p, -1))
+    let exp = parseExpr(p, -1)
+    if exp.kind != nkEmpty: addSon(result, exp)
     if p.tok.kind == tkParRi: break
     if p.tok.kind notin {tkComma, tkSemiColon}: break
     p.getTok()

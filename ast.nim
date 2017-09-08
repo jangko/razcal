@@ -1,10 +1,14 @@
-import sets, idents, strutils, layout, context, kiwi
+import sets, idents, strutils, layout, context, kiwi, tables
 
 type
   Scope* = ref object
     depthLevel*: int
     symbols*: HashSet[Symbol]
     parent*: Scope
+
+  ClassContext* = ref object
+    paramTable*: Table[Ident, Symbol] # map param name to Symbol
+    n*: Node # Node.nkClass
 
   SymKind* = enum
     skUnknown, skView, skClass, skAlias, skStyle, skParam
@@ -15,9 +19,12 @@ type
     of skView:
       view*: View
     of skClass:
-      class*: Node   # Node.nkClass
+      class*: ClassContext
+    of skParam:
+      value*: Node   # the default value of a param or nil
     else: nil
     name*: Ident
+    pos*: int        # param position
     lineInfo*: LineInfo
 
   NodeKind* = enum
@@ -219,9 +226,19 @@ proc newViewSymbol*(n: Node, view: View): Symbol =
   result = newSymbol(skView, n)
   result.view = view
 
-proc newClassSymbol*(n: Node, cls: Node): Symbol =
+proc newClassSymbol*(n: Node, cls: ClassContext): Symbol =
   result = newSymbol(skClass, n)
   result.class = cls
+
+proc newClassContext*(n: Node): ClassContext =
+  new(result)
+  result.n = n
+  result.paramTable = initTable[Ident, Symbol](8)
+
+proc newParamSymbol*(n: Node, val: Node, pos: int): Symbol =
+  result = newSymbol(skParam, n)
+  result.value = val
+  result.pos = pos
 
 template symString*(n: Node): string =
   assert(n.kind == nkSymbol)
