@@ -271,16 +271,12 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       else:
         lay.sourceError(errUndefinedVar, n, n.ident)
     else:
-      if id in constRel:
-        let view = lay.selectViewRel(lay.lastView, id)
-        if view.isNil:
-          if choiceMode:
-            return lay.emptyNode
-          else:
-            lay.sourceError(errRelationNotFound, n, n.ident, lay.lastView.name)
-        result = lay.viewTbl[view]
-      else:
-        lay.sourceError(errUndefinedRel, n, n.ident)
+      let view = if id in constRel: lay.selectViewRel(lay.lastView, id)
+        else: lay.lastView.views.getOrDefault(n.ident)
+      if view.isNil:
+        if choiceMode: return lay.emptyNode
+        else: lay.sourceError(errRelationNotFound, n, n.ident, lay.lastView.name)
+      result = lay.viewTbl[view]
   of nkDotCall:
     let tempView = lay.lastView
     assert(n.sons.len == 2)
