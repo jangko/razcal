@@ -49,14 +49,16 @@ documentation none, tutorial none.
   * parse style section
   * parse prop section
 * semantic pass
-  * class instantiation
+  * ~class instantiation~
     * ~collecting param~
     * ~param substitution~
     * ~argument checking with or without default argument~
     * ~class copying~
     * ~instantiation with or without default argument~
     * ~semcheck~
-  * applying prop and style to view
+  * applying functional constraint  
+  * applying prop to view
+  * applying style to view
   * exposing events to lua
 * lua binding
   * ~fix cfunction argument validation~
