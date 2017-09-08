@@ -678,6 +678,14 @@ proc constOp(lay: Layout, a, b, op: Node, id: SpecialWords) =
   of wLessOrEqual: lay.constOpLE(a, b, op)
   else: internalError(lay, errUnknownEqualityOpr, id)
 
+proc secChoiceList(lay: Layout, lhs, rhs, op: Node, opId: SpecialWords) =
+  if rhs.kind != nkChoiceList: lay.sourceError(errUnbalancedArm, op)
+  if rhs.len != lhs.len: lay.sourceError(errUnbalancedArm, op)
+  for i in 0.. <lhs.len:
+    lhs[i] = lay.secConstExpr(lhs[i])
+    rhs[i] = lay.secConstExpr(rhs[i])
+    lay.constOp(lhs[i], rhs[i], op, opId)
+
 proc secConstList(lay: Layout, n: Node) =
   assert(n.kind == nkConstList)
   for cc in n.sons:
@@ -689,9 +697,12 @@ proc secConstList(lay: Layout, n: Node) =
       let rhs = cc.sons[i+2]
       let opId = toKeyWord(op)
       assert(opId in constOpr)
-      cc.sons[i] = lay.secConstExpr(lhs)
-      cc.sons[i+2] = lay.secConstExpr(rhs)
-      lay.constOp(cc.sons[i], cc.sons[i+2], op, opId)
+      if lhs.kind == nkChoiceList:
+        lay.secChoiceList(lhs, rhs, op, opId)
+      else:
+        cc.sons[i] = lay.secConstExpr(lhs)
+        cc.sons[i+2] = lay.secConstExpr(rhs)
+        lay.constOp(cc.sons[i], cc.sons[i+2], op, opId)
 
 proc secEventList(lay: Layout, n: Node) =
   discard

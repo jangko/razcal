@@ -42,6 +42,7 @@ type
 
     # constraint's related node
     nkChoice       # a list of exprs, excluding '|' operator
+    nkChoiceList   # a list of choices, separated by comma ','
     nkConstraint   # kiwi.Constraint
     nkConstExpr    # kiwi.Expression
     nkConstTerm    # kiwi.Term

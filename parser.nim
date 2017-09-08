@@ -261,9 +261,22 @@ proc parseChoice(p: var Parser): Node =
   else:
     result = exp
 
+proc parseChoiceList(p: var Parser): Node =
+  var choice = p.parseChoice()
+  if p.tok.kind == tkComma:
+    result = newNodeP(p, nkChoiceList, choice)
+    while p.tok.kind == tkComma:
+      p.getTok()
+      choice = p.parseChoice()
+      if choice.kind == nkEmpty:
+        p.error(errExprExpected)
+      addSon(result, choice)
+  else:
+    result = choice
+
 proc parseConst(p: var Parser): Node =
   const constOpr = [tkEquals, tkGreaterOrEqual, tkLessOrEqual]
-  var choice = p.parseChoice()
+  var choice = p.parseChoiceList()
   if choice.kind == nkEmpty: return choice
   if choice.kind == nkBracketExpr:
     p.error(errPropExpected)
@@ -273,7 +286,7 @@ proc parseConst(p: var Parser): Node =
       let opr = newIdentNodeP(p)
       addSon(result, opr)
       p.getTok()
-      choice = p.parseChoice()
+      choice = p.parseChoiceList()
       if choice.kind == nkEmpty:
         p.error(errExprExpected)
       if choice.kind == nkBracketExpr:

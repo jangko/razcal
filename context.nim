@@ -90,6 +90,7 @@ type
     errUnknownProp
     errUndefinedEvent
     errUnknownEvent
+    errUnbalancedArm
 
     # other's errors
     errCannotOpenFile
@@ -152,6 +153,7 @@ const
     errUnknownProp: "`$1` is an unknown view property",
     errUndefinedEvent: "`$1` is an undefined view event",
     errUnknownEvent: "`$1` is an unknown view event",
+    errUnbalancedArm: "left and right arm is not balanced here",
 
     # other errors
     errCannotOpenFile: "cannot open file: $1",
