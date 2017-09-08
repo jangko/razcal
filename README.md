@@ -51,11 +51,11 @@ documentation none, tutorial none.
 * semantic pass
   * class instantiation
     * ~collecting param~
-    * param substitution
+    * ~param substitution~
     * ~argument checking with or without default argument~
-    * class copying
+    * ~class copying~
     * instantiation with or without default argument
-    * semcheck
+    * ~semcheck~
   * applying prop and style to view
   * exposing events to lua
 * lua binding

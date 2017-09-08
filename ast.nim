@@ -7,11 +7,14 @@ type
     parent*: Scope
 
   ClassContext* = ref object
-    paramTable*: Table[Ident, Symbol] # map param name to Symbol
+    paramTable*: Table[Ident, Node] # map param name to SymbolNode
     n*: Node # Node.nkClass
 
   SymKind* = enum
     skUnknown, skView, skClass, skAlias, skStyle, skParam
+
+  SymFlags* = enum
+    sfUsed
 
   Symbol* = ref SymbolObj
   SymbolObj* {.acyclic.} = object of IDobj
@@ -23,6 +26,7 @@ type
     of skParam:
       value*: Node   # the default value of a param or nil
     else: nil
+    flags*: set[SymFlags]
     name*: Ident
     pos*: int        # param position
     lineInfo*: LineInfo
@@ -233,7 +237,7 @@ proc newClassSymbol*(n: Node, cls: ClassContext): Symbol =
 proc newClassContext*(n: Node): ClassContext =
   new(result)
   result.n = n
-  result.paramTable = initTable[Ident, Symbol](8)
+  result.paramTable = initTable[Ident, Node](8)
 
 proc newParamSymbol*(n: Node, val: Node, pos: int): Symbol =
   result = newSymbol(skParam, n)

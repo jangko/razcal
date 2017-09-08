@@ -97,6 +97,8 @@ type
     errCannotOpenFile
     errLua
 
+    warnParamNotUsed
+
 const
   InvalidFileIDX* = int32(-1)
 
@@ -160,6 +162,8 @@ const
     # other errors
     errCannotOpenFile: "cannot open file: $1",
     errLua: "lua VM error: $1",
+
+    warnParamNotUsed: "param `$1` not used",
   ]
 
 proc openContext*(): Context =
@@ -225,12 +229,18 @@ proc marker(err: SourceError): string =
       result[i] = '.'
       dec i
 
-proc printError*(ctx: Context, err: SourceError) =
+proc printMessage*(ctx: Context, err: SourceError, errClass: string) =
   assert(err.fileIndex >= 0 and err.fileIndex < ctx.fileInfos.len)
   let info = ctx.fileInfos[err.fileIndex]
-  let msg = "$1($2,$3) Error: $4" % [info.fileName, $err.line, $(err.column + 1), err.msg]
+  let msg = "$1($2,$3) $4: $5" % [info.fileName, $err.line, $(err.column + 1), errClass, err.msg]
   echo err.marker()
   echo msg
+
+proc printWarning*(ctx: Context, err: SourceError) =
+  ctx.printMessage(err, "Warning")
+
+proc printError*(ctx: Context, err: SourceError) =
+  ctx.printMessage(err, "Error")
 
 proc printError*(ctx: Context, err: InternalError) =
   let msg = "$1:$2 -> Internal Error: $3" % [err.fileName, $err.line, err.msg]

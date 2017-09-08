@@ -87,7 +87,7 @@ proc getCurrentLine*(lay: Layout, info: context.LineInfo): string =
   f.close()
   if result.isNil: result = ""
 
-proc sourceError(lay: Layout, kind: MsgKind, n: Node, args: varargs[string, `$`]) =
+proc sourceError[T: Node or Symbol](lay: Layout, kind: MsgKind, n: T, args: varargs[string, `$`]) =
   # report any error during semcheck
   var err = new(SourceError)
   err.msg = lay.context.msgKindToString(kind, args)
@@ -97,12 +97,22 @@ proc sourceError(lay: Layout, kind: MsgKind, n: Node, args: varargs[string, `$`]
   err.fileIndex = n.lineInfo.fileIndex
   raise err
 
+proc sourceWarning[T: Node or Symbol](lay: Layout, kind: MsgKind, n: T, args: varargs[string, `$`]) =
+  # report any error during semcheck
+  var err = new(SourceError)
+  err.msg = lay.context.msgKindToString(kind, args)
+  err.line = n.lineInfo.line
+  err.column = n.lineInfo.col
+  err.lineContent = lay.getCurrentLine(n.lineInfo)
+  err.fileIndex = n.lineInfo.fileIndex
+  lay.context.printWarning(err)
+
 proc semViewName(lay: Layout, n: Node, lastIdent: Node): Node =
   # check and resolve view name hierarchy
   # such as view1.view1child.view1grandson
   case n.kind
   of nkDotCall:
-    ensure(n.sons.len == 2)
+    ensure(n.len == 2)
     n[0] = lay.semViewName(n[0], lastIdent)
     ensure(n[0].kind == nkSymbol)
     lay.lastView = n[0].sym.view
@@ -160,7 +170,7 @@ proc semViewBody(lay: Layout, n: Node): Node =
   result = n
 
 proc semView(lay: Layout, n: Node) =
-  ensure(n.sons.len == 3)
+  ensure(n.len == 3)
   # each time we create new view
   # need to reset the lastView
   lay.lastView = lay.root
@@ -177,19 +187,41 @@ proc semView(lay: Layout, n: Node) =
   n[1] = lay.semViewClass(n[1])
   n[2] = lay.semViewBody(n[2])
 
+proc subst(lay: Layout, n: Node, cls: ClassContext): Node =
+  case n.kind
+  of nkConstList, nkConst, nkDotCall:
+    for i in 0.. <n.len:
+      n[i] = lay.subst(n[i], cls)
+    result = n
+  of nkIdent:
+    let sym = cls.paramTable.getOrDefault(n.ident)
+    if not sym.isNil:
+      sym.sym.flags.incl(sfUsed)
+      return sym
+    result = n
+  of nkUint:
+    result = n
+  else:
+    internalError(lay, errUnknownNode, n.kind)
+
 proc substituteParams(lay: Layout, n: Node, cls: ClassContext) =
-  discard
+  for i in 0.. <n.len:
+    n[i] = lay.subst(n[i], cls)
+
+  for s in values(cls.paramTable):
+    if sfUsed notin s.sym.flags:
+      lay.sourceWarning(warnParamNotUsed, s, s.sym.name)
 
 proc collectParams(lay: Layout, n: Node, cls: ClassContext) =
   if n.kind == nkEmpty: return
   ensure(n.kind == nkClassParams)
-  for i in 0.. <n.sons.len:
+  for i in 0.. <n.len:
     let m = n.sons[i]
     case m.kind
     of nkIdent:
       let p = cls.paramTable.getOrDefault(m.ident)
       if p.isNil:
-        cls.paramTable[m.ident] = newParamSymbol(m, nil, i)
+        cls.paramTable[m.ident] = newParamSymbol(m, nil, i).newSymbolNode()
       else:
         lay.sourceError(errDuplicateParam, m, m.ident)
     of nkAsgn:
@@ -198,14 +230,14 @@ proc collectParams(lay: Layout, n: Node, cls: ClassContext) =
       let paramValue = m[2]
       let p = cls.paramTable.getOrDefault(paramName.ident)
       if p.isNil:
-        cls.paramTable[paramName.ident] = newParamSymbol(paramName, paramValue, i)
+        cls.paramTable[paramName.ident] = newParamSymbol(paramName, paramValue, i).newSymbolNode()
       else:
         lay.sourceError(errDuplicateParam, paramName, paramName.ident)
     else:
       internalError(lay, errUnknownNode, m.kind)
 
 proc semClass(lay: Layout, n: Node) =
-  ensure(n.sons.len == 3)
+  ensure(n.len == 3)
   let className = n[0]
   var symNode = lay.classTbl.getOrDefault(className.ident)
   if symNode.isNil:
@@ -218,10 +250,10 @@ proc semClass(lay: Layout, n: Node) =
     let info = symNode.lineInfo
     let prev = lay.context.toString(info)
     lay.sourceError(errDuplicateClass, className, symNode.symString, prev)
-  let classParams = n[1]
-  lay.collectParams(classParams, symNode.sym.class)
-  let classBody = n[2]
-  lay.substituteParams(classBody, symNode.sym.class)
+  let cls = symNode.sym.class
+  lay.collectParams(n[1], cls)    # n[1] = classParams
+  if cls.paramTable.len > 0:
+    lay.substituteParams(n[2], cls) # n[2] = classBody
 
 proc semStmt(lay: Layout, n: Node) =
   case n.kind
@@ -235,6 +267,40 @@ proc semTopLevel*(lay: Layout, n: Node) =
   for son in n.sons:
     lay.semStmt(son)
 
+# entering second pass
+proc secViewBody(lay: Layout, n: Node)
+
+proc checkParamCountMatch(lay: Layout, params, classParams: Node) =
+  if classParams.kind == nkEmpty:
+    if params.len > 0:
+      lay.sourceError(errParamCountNotMatch, params, 0, params.len)
+    return
+
+  ensure(classParams.kind == nkClassParams)
+  if params.len == classParams.len: return
+
+  if params.len > classParams.len:
+    lay.sourceError(errParamCountNotMatch, params, classParams.len, params.len)
+
+  var count = classParams.len
+  # count params without default value
+  for i in countdown(classParams.len-1, 0):
+    if classParams[i].kind != nkAsgn:
+      count = i + 1
+      break
+
+  # count available and needed param
+  for i in params.len.. <classParams.len:
+    if classParams[i].kind != nkAsgn:
+      # it has no default value
+      lay.sourceError(errParamCountNotMatch, params, count, params.len)
+
+proc instantiateClass(lay: Layout, class: ClassContext, params: Node): Node =
+  # copy only the class body which is essentialy
+  # has the same structure with view body
+  result = class.n[2].copyTree()
+  lay.secViewbody(result)
+
 proc secViewClass(lay: Layout, n: Node) =
   ensure(n.kind in {nkViewClassList, nkEmpty})
   for vc in n.sons:
@@ -243,33 +309,16 @@ proc secViewClass(lay: Layout, n: Node) =
     let name = vc.sons[0]
     let params = vc.sons[1]
     ensure(name.kind == nkIdent)
-    let classNode = lay.classTbl.getOrDefault(name.ident)
-    if classNode.isNil:
+    let classSymbol = lay.classTbl.getOrDefault(name.ident)
+    if classSymbol.isNil:
       lay.sourceError(errClassNotFound, name, name.ident.s)
-    else:
-      vc.sons[0] = classNode
-      let class = classNode.sym.class
-      let classParams = class.n[1]
-      if classParams.kind == nkEmpty:
-        if params.len > 0:
-          lay.sourceError(errParamCountNotMatch, params, 0, params.len)
-        continue
-
-      ensure(classParams.kind == nkClassParams)
-      if params.len != classParams.len:
-        if params.len > classParams.len:
-          lay.sourceError(errParamCountNotMatch, params, classParams.len, params.len)
-        else:
-          var count = classParams.len
-          for i in countdown(classParams.len-1, 0):
-            if classParams[i].kind != nkAsgn:
-              count = i + 1
-              break
-
-          for i in params.len.. <classParams.len:
-            if classParams[i].kind != nkAsgn:
-              # it has no default value
-              lay.sourceError(errParamCountNotMatch, params, count, params.len)
+    # replace name with symbol
+    vc.sons[0] = classSymbol
+    let class = classSymbol.sym.class
+    let classParams = class.n[1]
+    lay.checkParamCountMatch(params, classParams)
+    # replace param(s) with intantiated class
+    vc.sons[1] = lay.instantiateClass(class, params)
 
 proc selectViewProp(lay: Layout, view: View, id: SpecialWords): Variable =
   case id
@@ -335,7 +384,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       result = lay.viewTbl[view]
   of nkDotCall:
     let tempView = lay.lastView
-    ensure(n.sons.len == 2)
+    ensure(n.len == 2)
     n[0] = lay.resolveTerm(n[0], lastIdent, choiceMode)
     if choiceMode and n[0].kind == nkEmpty: return n[0]
     ensure(n[0].kind == nkSymbol)
@@ -345,7 +394,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
     lay.lastView = tempView
     result = n[1]
   of nkBracketExpr:
-    ensure(n.sons.len == 2)
+    ensure(n.len == 2)
     ensure(n[0].kind == nkIdent)
     let id = toKeyWord(n[0])
     if id in constRel:
@@ -586,7 +635,7 @@ proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
   of nkUint:
     result = n
   of nkDotCall:
-    ensure(n.sons.len == 2)
+    ensure(n.len == 2)
     ensure(n[1].kind == nkIdent)
     result = lay.resolveTerm(n, n[1].ident, choiceMode)
   of nkInfix:
@@ -767,6 +816,7 @@ proc secPropList(lay: Layout, n: Node) =
   discard
 
 proc secViewBody(lay: Layout, n: Node) =
+  ensure(n.kind == nkStmtList)
   for m in n.sons:
     case m.kind
     of nkConstList: lay.secConstList(m)
