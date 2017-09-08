@@ -295,11 +295,31 @@ proc checkParamCountMatch(lay: Layout, params, classParams: Node) =
       # it has no default value
       lay.sourceError(errParamCountNotMatch, params, count, params.len)
 
-proc instantiateClass(lay: Layout, class: ClassContext, params: Node): Node =
+proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
+  case n.kind
+  of nkStmtList, nkConstList, nkConst, nkDotCall:
+    for i in 0.. <n.len:
+      n[i] = lay.instClass(n[i], cls, params)
+    result = n
+  of nkSymbol:
+    if n.sym.pos >= 0 and n.sym.pos < params.len:
+      result = params[n.sym.pos]
+    else:
+      result = n.sym.value
+  of nkIdent, nkUInt:
+    result = n
+  else:
+    internalError(lay, errUnknownNode, n.kind)
+
+proc instantiateClass(lay: Layout, cls: ClassContext, params: Node): Node =
   # copy only the class body which is essentialy
   # has the same structure with view body
-  result = class.n[2].copyTree()
-  lay.secViewbody(result)
+  var n = cls.n[2].copyTree()
+  for i in 0.. <n.len:
+    n[i] = lay.instClass(n[i], cls, params)
+
+  lay.secViewbody(n)
+  result = n
 
 proc secViewClass(lay: Layout, n: Node) =
   ensure(n.kind in {nkViewClassList, nkEmpty})
@@ -411,6 +431,8 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       result = lay.viewTbl[view]
     else:
       lay.sourceError(errUndefinedRel, n[0], n[0].ident)
+  of nkString:
+    lay.sourceError(errStringNotAllowed, n)
   else:
     internalError(lay, errUnknownNode, n.kind)
 

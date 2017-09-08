@@ -54,7 +54,7 @@ documentation none, tutorial none.
     * ~param substitution~
     * ~argument checking with or without default argument~
     * ~class copying~
-    * instantiation with or without default argument
+    * ~instantiation with or without default argument~
     * ~semcheck~
   * applying prop and style to view
   * exposing events to lua
