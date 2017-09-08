@@ -73,6 +73,37 @@ template getCenterX*(view: View): float64 =
 template getCenterY*(view: View): float64 =
   view.centerY.value
 
+template getParent*(view: View): View =
+  view.parent
+
+proc getPrev*(view: View): View =
+  result = nil
+  if not view.parent.isNil:
+    let i = view.idx - 1
+    if i >= 0 and i < view.parent.children.len:
+      result = view.parent.children[i]
+
+proc getNext*(view: View): View =
+  result = nil
+  if not view.parent.isNil:
+    let i = view.idx + 1
+    if i < view.parent.children.len:
+      result = view.parent.children[i]
+
+proc getPrevIdx*(view: View, idx: int): View =
+  result = nil
+  if not view.parent.isNil:
+    let i = view.idx - idx
+    if i >= 0 and i < view.parent.children.len:
+      result = view.parent.children[i]
+
+proc getNextIdx*(view: View, idx: int): View =
+  result = nil
+  if not view.parent.isNil:
+    let i = view.idx + idx
+    if i < view.parent.children.len:
+      result = view.parent.children[i]
+
 proc print*(view: View) =
   echo view.top
   echo view.left

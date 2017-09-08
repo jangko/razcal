@@ -249,7 +249,7 @@ proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
     if not view.parent.isNil:
       if idx < 0: return view.parent.children[0]
       let i = view.idx - idx
-      if i >= 0:
+      if i >= 0 and i < view.parent.children.len:
         result = view.parent.children[i]
   of wNext:
     if not view.parent.isNil:
@@ -750,6 +750,11 @@ proc luaBinding(lay: Layout) =
     getHeight -> "_get_height"
     getCenterX -> "_get_centerX"
     getCenterY -> "_get_centerY"
+    getNext -> "_get_next"
+    getPrev -> "_get_prev"
+    getNextIdx -> "getNext"
+    getPrevIdx -> "getPrev"
+    getParent -> "_get_parent"
     idx(get)
   #nimLuaOptions(nloDebug, false)
 

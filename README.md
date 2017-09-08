@@ -44,7 +44,7 @@ backend renderer not available, test suite not available,
 documentation none, tutorial none.
 
 * parser
-  * parse comma separated constraint
+  * ~parse comma separated constraint~
   * parse functional constraint
   * parse style section
   * parse prop section
