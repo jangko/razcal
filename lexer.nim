@@ -18,7 +18,7 @@ type
     tkBang, tkChoice
     tkEquals, tkGreaterOrEqual, tkLessOrEqual, tkOpr
 
-    tkProgram, tkStyle, tkAlias, tkConst, tkEvent, tkProp
+    tkProgram, tkStyle, tkAlias, tkFlex, tkEvent, tkProp
 
   TokenVal* = object {.union.}
     iNumber*: uint64

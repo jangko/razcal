@@ -160,7 +160,7 @@ proc semViewBody(lay: Layout, n: Node): Node =
 
   for m in n.sons:
     case m.kind
-    of nkConstList: lay.semConstList(m)
+    of nkFlexList: lay.semConstList(m)
     of nkEventList: lay.semEventList(m)
     of nkPropList:  lay.semPropList(m)
     of nkEmpty: discard
@@ -189,7 +189,7 @@ proc semView(lay: Layout, n: Node) =
 
 proc subst(lay: Layout, n: Node, cls: ClassContext): Node =
   case n.kind
-  of nkConstList, nkConst, nkDotCall:
+  of nkFlexList, nkFlex, nkDotCall:
     for i in 0.. <n.len:
       n[i] = lay.subst(n[i], cls)
     result = n
@@ -297,7 +297,7 @@ proc checkParamCountMatch(lay: Layout, params, classParams: Node) =
 
 proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
   case n.kind
-  of nkStmtList, nkConstList, nkConst, nkDotCall:
+  of nkStmtList, nkFlexList, nkFlex, nkDotCall:
     for i in 0.. <n.len:
       n[i] = lay.instClass(n[i], cls, params)
     result = n
@@ -814,9 +814,9 @@ proc secChoiceList(lay: Layout, lhs, rhs, op: Node, opId: SpecialWords) =
     lay.constOp(lhs[i], rhs[i], op, opId)
 
 proc secConstList(lay: Layout, n: Node) =
-  ensure(n.kind == nkConstList)
+  ensure(n.kind == nkFlexList)
   for cc in n.sons:
-    ensure(cc.kind == nkConst)
+    ensure(cc.kind == nkFlex)
     ensure(cc.len >= 3)
     for i in countup(0, cc.sons.len-2, 2):
       let lhs = cc.sons[i]
@@ -841,7 +841,7 @@ proc secViewBody(lay: Layout, n: Node) =
   ensure(n.kind == nkStmtList)
   for m in n.sons:
     case m.kind
-    of nkConstList: lay.secConstList(m)
+    of nkFlexList: lay.secConstList(m)
     of nkEventList: lay.secEventList(m)
     of nkPropList:  lay.secPropList(m)
     of nkEmpty: discard
@@ -946,4 +946,4 @@ proc semCheck*(lay: Layout, n: Node) =
 
   #echo n.treeRepr
   lay.solver.updateVariables()
-  #lay.context.executeLua("apple.lua")
+  lay.context.executeLua("apple.lua")

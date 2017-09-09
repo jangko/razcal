@@ -9,7 +9,7 @@ type
     wEquals, wGreaterOrEqual, wLessOrEqual  # TokenKind's order
     # keyword                               # to ensure proper
     wProgram, wStyle, wAlias                # token generated
-    wEvent, wProp, wConst
+    wEvent, wProp, wFlex
 
     # constraint relative
     wThis, wParent, wChild, wPrev, wNext
@@ -50,7 +50,7 @@ const
     "=", ">=", "<=",
 
     "program", "style", "alias",
-    "const", "event", "prop",
+    "flex", "event", "prop",
 
     "this", "parent", "child", "prev", "next",
     "left", "right", "top", "bottom",

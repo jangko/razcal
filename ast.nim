@@ -49,7 +49,7 @@ type
 
     # x.sons[1..n]
     nkStmtList, nkClassParams, nkViewClassList
-    nkEventList, nkPropList, nkConstList
+    nkEventList, nkPropList, nkFlexList
 
     # constraint's related node
     nkChoice       # a list of exprs, excluding '|' operator
@@ -69,7 +69,7 @@ type
     nkEvent, nkProp
 
     # a list of choices, including {'=','>=','<='} [in]equality
-    nkConst # this will become nkConstraint
+    nkFlex # a single constraint
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object

@@ -282,7 +282,7 @@ proc parseConst(p: var Parser): Node =
   if choice.kind == nkBracketExpr:
     p.error(errPropExpected)
   if p.tok.kind in constOpr:
-    result = newNodeP(p, nkConst, choice)
+    result = newNodeP(p, nkFlex, choice)
     while p.tok.kind in constOpr:
       let opr = newIdentNodeP(p)
       addSon(result, opr)
@@ -297,7 +297,7 @@ proc parseConst(p: var Parser): Node =
     p.error(errConstOprNeeded)
 
 proc parseConstList(p: var Parser): Node =
-  p.getTok() # skip tkConst
+  p.getTok() # skip tkFlex
   result = p.emptyNode
   withInd(p):
     while sameInd(p):
@@ -305,7 +305,7 @@ proc parseConstList(p: var Parser): Node =
       if n.kind == nkEmpty:
         #p.error(errExprExpected)
         return n
-      if result.kind == nkEmpty: result = newNodeP(p, nkConstList)
+      if result.kind == nkEmpty: result = newNodeP(p, nkFlexList)
       addSon(result, n)
 
 proc parseEvent(p: var Parser): Node =
@@ -364,7 +364,7 @@ proc parseViewBody(p: var Parser): Node =
       of tkEvent:
         let list = parseEventList(p)
         addSon(result, list)
-      of tkConst:
+      of tkFlex:
         let list = parseConstList(p)
         addSon(result, list)
       of tkEof:
