@@ -36,10 +36,10 @@ you can add more functionality either using Nim, Lua, or moonscript as a module.
 It already and always be easy to build.
 ### roadmap
 
-right now, razcal pretty much still an embryo,
-the parser, constraint solver engine,
-and lua binding already found it's way to communicate to each other,
-but many features of layout language still not implemented yet,
+right now, razcal pretty much still an embryo.
+The parser, constraint solver engine,
+and lua binding already found it's way to communicate to each other.
+But many features of layout language still not implemented yet,
 backend renderer not available, test suite not available,
 documentation none, tutorial none.
 
@@ -56,15 +56,16 @@ documentation none, tutorial none.
     * ~class copying~
     * ~instantiation with or without default argument~
     * ~semcheck~
-  * applying functional constraint  
+  * applying functional constraint
   * applying prop to view
   * applying style to view
   * exposing events to lua
 * lua binding
   * ~fix cfunction argument validation~
   * ~reimplement metatable for userdata~
-  * add error reporting mechanism without using lua_error
+  * ~add error reporting mechanism without using lua_error~
   * ~expose everything in layout to lua safely~
+  * call lua from nim
 * renderer
   * bring up crude renderer to design backend api
 * test suite

@@ -1,7 +1,7 @@
 type
   SpecialWords* = enum
-    wInvalid    
-            
+    wInvalid
+
     # operators
     wPlus, wMinus, wMul, wDiv
     wDot, wDotDot, wColon, wColonColon      # this two section
@@ -80,7 +80,6 @@ const
   constProp* = {wLeft..wCenterY}
   constBinaryTermOp* = {wPlus, wMinus, wMul, wDiv}
   constUnaryTermOp* = {wMinus}
-  
+
   validEvents* = {wClick..wOnDrop}
   validProps* = {wContent..wIcon}
-  
