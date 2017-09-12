@@ -210,17 +210,20 @@ proc parseExpr(p: var Parser, minPrec: int, prev = Node(nil)): Node =
       result = newNodeP(p, nkInfix, opNode, result, rhs)
 
 proc parseViewClassArgs(p: var Parser): Node =
-  p.getTok()
-  p.optInd()
   result = newNodeP(p, nkViewParam)
-  while true:
-    let exp = parseExpr(p, -1)
-    if exp.kind != nkEmpty: addSon(result, exp)
-    if p.tok.kind == tkParRi: break
-    if p.tok.kind notin {tkComma, tkSemiColon}: break
+  p.getTok()
+  if p.tok.kind == tkParLe and p.tok.indent < 0:
     p.getTok()
-  p.optPar()
-  eat(p, tkParRi)
+    p.optInd()
+
+    while true:
+      let exp = parseExpr(p, -1)
+      if exp.kind != nkEmpty: addSon(result, exp)
+      if p.tok.kind == tkParRi: break
+      if p.tok.kind notin {tkComma, tkSemiColon}: break
+      p.getTok()
+    p.optPar()
+    eat(p, tkParRi)
 
 proc parseViewClass(p: var Parser): Node =
   if p.tok.kind != tkColonColon:
@@ -230,12 +233,7 @@ proc parseViewClass(p: var Parser): Node =
   if p.tok.kind != tkIdent:
     p.error(errIdentExpected)
   let name = newIdentNodeP(p)
-
-  var args = p.emptyNode
-  p.getTok()
-  if p.tok.kind == tkParLe and p.tok.indent < 0:
-    args = parseViewClassArgs(p)
-
+  let args = parseViewClassArgs(p)
   result = newNodeP(p, nkViewClass, name, args)
 
 proc parseViewClassList(p: var Parser): Node =
@@ -459,15 +457,15 @@ proc main() =
   var knownFile = false
   let fileIndex = ctx.fileInfoIdx(fileName, knownFile)
 
-  try:
-  #block:
+  #try:
+  block:
     var p = openParser(input, ctx, fileIndex)
     var root = p.parseAll()
     p.close()
 
     var lay = newLayout(0, ctx)
     lay.semCheck(root)
-  except SourceError as srcErr:
+  #[except SourceError as srcErr:
     ctx.printError(srcErr)
   except InternalError as ex:
     ctx.printError(ex)
@@ -475,7 +473,7 @@ proc main() =
     echo ex.msg
   except Exception as ex:
     echo "unknown error: ", ex.msg
-    writeStackTrace()
+    writeStackTrace()]#
 
   ctx.close()
 

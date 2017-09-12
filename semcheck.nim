@@ -192,7 +192,7 @@ proc semView(lay: Layout, n: Node) =
 
 proc subst(lay: Layout, n: Node, cls: ClassContext): Node =
   case n.kind
-  of nkFlexList, nkFlex, nkDotCall:
+  of nkFlexList, nkFlex, nkDotCall, nkChoice, nkInfix, nkBracketExpr:
     for i in 0.. <n.len:
       n[i] = lay.subst(n[i], cls)
     result = n
@@ -300,7 +300,7 @@ proc checkParamCountMatch(lay: Layout, params, classParams: Node) =
 
 proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
   case n.kind
-  of nkStmtList, nkFlexList, nkFlex, nkDotCall, nkChoice:
+  of nkStmtList, nkFlexList, nkFlex, nkDotCall, nkChoice, nkInfix, nkBracketExpr:
     for i in 0.. <n.len:
       n[i] = lay.instClass(n[i], cls, params)
     result = n
@@ -388,6 +388,23 @@ proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
   else:
     internalError(lay, errUnknownRel, id)
 
+proc computeIdx(lay: Layout, n: Node): int =
+  result = 1
+  case n.kind
+  of nkEmpty: result = -1
+  of nkUInt: result = int(n.uintVal)
+  of nkInfix:
+    let op  = toKeyword(n[0])
+    let lhs = lay.computeIdx(n[1])
+    let rhs = lay.computeIdx(n[2])
+    case op
+    of wPlus: result = lhs + rhs
+    of wMinus: result = lhs - rhs
+    of wMul: result = lhs * rhs
+    of wDiv: result = lhs div rhs
+    else: internalError(lay, errUnknownBinaryOpr, op)
+  else: internalError(lay, errUnknownNode, n.kind)
+
 proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): Node =
   case n.kind
   of nkIdent:
@@ -421,16 +438,11 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
     ensure(n[0].kind == nkIdent)
     let id = toKeyWord(n[0])
     if id in constRel:
-      var idx = 1
-      if n[1].kind == nkEmpty: idx = -1
-      elif n[1].kind == nkUInt: idx = int(n[1].uintVal)
-      else: internalError(lay, errUnknownNode, n[1].kind)
+      let idx  = lay.computeIdx(n[1])
       let view = lay.selectViewRel(lay.lastView, id, idx)
       if view.isNil:
-        if choiceMode:
-          return lay.emptyNode
-        else:
-          lay.sourceError(errWrongRelationIndex, n[1], idx)
+        if choiceMode: return lay.emptyNode
+        else: lay.sourceError(errWrongRelationIndex, n[1], idx)
       result = lay.viewTbl[view]
     else:
       lay.sourceError(errUndefinedRel, n[0], n[0].ident)
