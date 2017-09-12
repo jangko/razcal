@@ -104,37 +104,5 @@ proc getNextIdx*(view: View, idx: int): View =
     if i < view.parent.children.len:
       result = view.parent.children[i]
 
-proc print*(view: View) =
-  echo view.top
-  echo view.left
-  echo view.bottom
-  echo view.right
-  echo view.width
-  echo view.height
-  echo view.centerX
-  echo view.centerY
-
-#[proc main() =
-  var
-    a = initView("a")
-    b = initView("b")
-    c = initView("c")
-    solver = newSolver()
-
-  solver.setConstraint(a)
-  solver.setConstraint(b)
-  solver.setConstraint(c)
-  solver.addConstraint(a.left >= 0)
-  solver.addConstraint(b.left == a.right)
-  solver.addConstraint(c.left == b.right)
-  solver.addConstraint(a.top == b.top)
-  solver.addConstraint(b.top == c.top)
-  solver.addConstraint(a.top >= 0)
-
-  solver.updateVariables()
-
-  a.print
-  b.print
-  c.print
-
-main()]#
+proc findChild*(view: View, id: Ident): View =
+  result = view.views.getOrDefault(id)

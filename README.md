@@ -65,7 +65,7 @@ documentation none, tutorial none.
   * ~reimplement metatable for userdata~
   * ~add error reporting mechanism without using lua_error~
   * ~expose everything in layout to lua safely~
-  * call lua from nim
+  * ~call lua from nim~
 * renderer
   * bring up crude renderer to design backend api
 * test suite

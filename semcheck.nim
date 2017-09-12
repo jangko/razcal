@@ -56,6 +56,9 @@ proc newLayout*(id: int, context: Context): Layout =
 proc getRoot(lay: Layout): View =
   result = lay.root
 
+proc getIdent(lay: Layout, s: string): Ident =
+  result = lay.context.getIdent(s)
+
 proc internalErrorImpl(lay: Layout, kind: MsgKind, fileName: string, line: int, args: varargs[string, `$`]) =
   # internal error aid debugging
   raise newInternalError(fileName, line, lay.context.msgKindToString(kind, args))
@@ -297,7 +300,7 @@ proc checkParamCountMatch(lay: Layout, params, classParams: Node) =
 
 proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
   case n.kind
-  of nkStmtList, nkFlexList, nkFlex, nkDotCall:
+  of nkStmtList, nkFlexList, nkFlex, nkDotCall, nkChoice:
     for i in 0.. <n.len:
       n[i] = lay.instClass(n[i], cls, params)
     result = n
@@ -838,7 +841,7 @@ proc secPropList(lay: Layout, n: Node) =
   discard
 
 proc secViewBody(lay: Layout, n: Node) =
-  ensure(n.kind == nkStmtList)
+  ensure(n.kind in {nkStmtList, nkEmpty})
   for m in n.sons:
     case m.kind
     of nkFlexList: lay.secConstList(m)
@@ -871,12 +874,14 @@ proc secTopLevel*(lay: Layout, n: Node) =
   for son in n.sons:
     lay.secStmt(son)
 
-const layoutSingleton = 0xDEADBEEF
-
 proc luaBinding(lay: Layout) =
   var L = lay.context.getLua()
 
   #nimLuaOptions(nloDebug, true)
+  L.bindObject(Ident):
+    s(get)
+    id(get)
+
   L.bindObject(View):
     newView -> "new"
     getName -> "_get_name"
@@ -894,16 +899,18 @@ proc luaBinding(lay: Layout) =
     getNextIdx -> "getNext"
     getPrevIdx -> "getPrev"
     getParent -> "_get_parent"
+    findChild
     idx(get)
-  #nimLuaOptions(nloDebug, false)
 
   L.bindObject(Layout):
     getRoot
     getRoot -> "_get_root"
+    getIdent
     id(get)
+  #nimLuaOptions(nloDebug, false)
 
   # store Layout reference
-  L.pushLightUserData(cast[pointer](layoutSingleton)) # push key
+  L.pushLightUserData(cast[pointer](NLMaxID)) # push key
   L.pushLightUserData(cast[pointer](lay)) # push value
   L.setTable(LUA_REGISTRYINDEX)           # registry[lay.addr] = lay
 
@@ -913,7 +920,7 @@ proc luaBinding(lay: Layout) =
     var ret = cast[ptr pxName](L.newUserData(sizeof(pxName)))
 
     # retrieve Layout
-    L.pushLightUserData(cast[pointer](layoutSingleton)) # push key
+    L.pushLightUserData(cast[pointer](NLMaxID)) # push key
     L.getTable(LUA_REGISTRYINDEX)           # retrieve value
     ret.ud = cast[Layout](L.toUserData(-1)) # convert to layout
     L.pop(1) # remove userdata
@@ -947,3 +954,18 @@ proc semCheck*(lay: Layout, n: Node) =
   #echo n.treeRepr
   lay.solver.updateVariables()
   lay.context.executeLua("apple.lua")
+
+  var L = lay.context.getLua()
+  L.getGlobal("View")     # get View table
+  discard L.pushString("onClick") # push the key "onClick"
+  L.rawGet(-2)            # get the function
+  if L.isNil(-1):
+    echo "onClick not found"
+  else:
+    var proxy = L.getUD(lay.root) # push first argument
+    assert(proxy == lay.root)
+    if L.pcall(1, 0, 0) != 0:
+      let errorMsg = L.toString(-1)
+      L.pop(1)
+      lay.context.otherError(errLua, errorMsg)
+  L.pop(1) # pop View Table

@@ -96,9 +96,10 @@ type
 let globalClosure {.compileTime.} = "_gCLV"
 
 const
-  IDRegion = 0xDEAF
+  IDRegion = 0xEF
   IDErrorContext = IDRegion - 1
   IDErrorFunc = IDRegion - 2
+  NLMaxID* = 0xFFF
 
 #counter that will be used to generate unique intermediate macro name
 #and avoid name collision
@@ -647,9 +648,6 @@ proc isObjectType(s: NimNode): bool {.compileTime.} =
   if n[2].kind != nnkObjectTy: return false
   result = true
 
-proc isRefOrObjectType(s: NimNode): bool {.compileTime.} =
-  result = isRefType(s) or isObjectType(s)
-
 proc hasName(name: string): bool {.compileTime.} =
   for n in nameList:
     if n == name: return true
@@ -669,18 +667,19 @@ proc registerObject(subject: NimNode): string {.compileTime.} =
   let subjectName = name & subjectID
   nameList.add prefixedName
   var glue = "const\n"
-  glue.add "  luaL_$1 = $2+$3\n" % [subjectName, $IDRegion, subjectID]
+  glue.add "  NL_$1 = $2+$3\n" % [subjectName, $IDRegion, subjectID]
+  glue.add "  NL_$1name = \"$2\"\n" % [subjectName, name]
   glue.add "type\n"
-  glue.add "  luaL_$1Proxy = object\n" % [subjectName]
+  glue.add "  NL_$1Proxy = object\n" % [subjectName]
   glue.add "    ud: $1\n" % [name]
   gContext.add glue
   result = subjectName
-
-proc checkUD(s, n, r: string): string {.compileTime.} =
-  result = "cast[ptr luaL_$1Proxy](L.nimCheckUData($2.cint, luaL_$1, \"$3\"))\n" % [s, n, r]
+  
+proc checkUD(s, n: string): string {.compileTime.} =
+  result = "cast[ptr NL_$1Proxy](L.nimCheckUData($2.cint, NL_$1, NL_$1name))\n" % [s, n]
 
 proc newUD(s: string): string {.compileTime.} =
-  result = "cast[ptr luaL_$1Proxy](L.newUserData(sizeof(luaL_$1Proxy)))\n" % [s]
+  result = "cast[ptr NL_$1Proxy](L.newUserData(sizeof(NL_$1Proxy)))\n" % [s]
 
 proc addMemberCap(SL, libName: string, argLen: int): string {.compileTime.} =
   when nloAddMember in gOptions:
@@ -927,7 +926,7 @@ proc nimNewMetaTable*(L: PState, key: int): int =
   if not L.isNil(-1): # name already in use?
     return 0 #leave previous value on top, but return 0
 
-  L.pop(1)
+  L.pop(1) # pop nil
   L.newTable() # create metatable
   L.pushLightUserData(cast[pointer](key))
   L.pushValue(-2)
@@ -1259,7 +1258,7 @@ proc constructComplexArg(ctx: proxyDesc, mType: NimNode, i: int, procName: strin
     let nType = getImpl(mType.symbol)[2]
     if nType.kind in {nnkObjectTy, nnkRefTy}:
       needCheck = "if not $1.isNil:\n"
-      return checkUD(registerObject(mType), $i, $mType)
+      return checkUD(registerObject(mType), $i)
 
     if nType.kind == nnkDistinctTy:
       return constructArg(ctx, nType[0], i, procName, needcheck)
@@ -1309,7 +1308,7 @@ proc constructComplexArg(ctx: proxyDesc, mType: NimNode, i: int, procName: strin
     let nType = getType(mType[0])
     if nType.kind in {nnkObjectTy, nnkRefTy}:
       needCheck = "if not $1.isNil:\n"
-      return checkUD(registerObject(mType[0]), $i, $mType[0])
+      return checkUD(registerObject(mType[0]), $i)
     if nType.kind == nnkSym:
       outValList.add constructBasicRet(nType, "arg" & $(i-1), "", procName)
       return constructBasicArg(nType, i, procName)
@@ -1440,15 +1439,17 @@ proc constructComplexRet(mType: NimNode, procCall, indent, procName: string): st
 
     if nType.kind in {nnkObjectTy, nnkRefTy}:
       let subjectName = registerObject(mType)
-      var glue = indent & "var proxyret = " & newUD(subjectName)
+      var glue = ""
       if isRefType(mType):
-        # again, don't forget to zero out the ref
-        glue.add indent & "zeroMem(proxyret.ud.addr, sizeof(proxyret.ud))\n"
-      glue.add indent & "proxyret.ud = $1\n" % [procCall]
-      if isRefType(mType):
-        glue.add indent & "if proxyret.ud.isNil: return 0\n"
-        glue.add indent & "GC_ref(proxyret.ud)\n"
-      glue.add indent & "L.nimGetMetatable(luaL_$1)\n" % [subjectName]
+        glue.add indent & "var pxret: NL_$1Proxy\n" % [subjectName]
+        glue.add indent & "pxret.ud = $1\n" % [procCall]
+        glue.add indent & "let proxyret = getRegisteredUD[NL_$1Proxy](L, pxret)\n" % [subjectName]
+        glue.add indent & "if proxyret.isNil: return 0\n"
+      else:
+        glue.add indent & "var proxyret = " & newUD(subjectName)
+        glue.add indent & "proxyret.ud = $1\n" % [procCall]
+
+      glue.add indent & "L.nimGetMetatable(NL_$1)\n" % [subjectName]
       glue.add indent & "discard L.setMetatable(-2)\n"
       return glue
 
@@ -1487,9 +1488,18 @@ proc constructComplexRet(mType: NimNode, procCall, indent, procName: string): st
   if mType.kind == nnkVarTy:
     if getType(mType[0]).kind in {nnkObjectTy, nnkRefTy}:
       let subjectName = registerObject(mType)
-      var glue = indent & "var proxy = " & newUD(subjectName)
-      glue.add indent & "proxy.ud = $1\n" % [procCall]
-      glue.add indent & "L.nimGetMetatable(luaL_$1)\n" % [subjectName]
+      var glue = ""
+
+      if getType(mType[0]).kind == nnkRefTy:
+        glue.add indent & "var pxvar: NL_$1Proxy\n" % [subjectName]
+        glue.add indent & "pxvar.ud = $1\n" % [procCall]
+        glue.add indent & "let proxy = getRegisteredUD[NL_$1Proxy](L, pxvar)\n" % [subjectName]
+        glue.add indent & "if proxy.isNil: return 0\n"
+      else:
+        glue.add indent & "var proxy = " & newUD(subjectName)
+        glue.add indent & "proxy.ud = $1\n" % [procCall]
+
+      glue.add indent & "L.nimGetMetatable(NL_$1)\n" % [subjectName]
       glue.add indent & "discard L.setMetatable(-2)\n"
       return glue
 
@@ -1700,8 +1710,7 @@ proc genOvCallMany(ctx: proxyDesc, ovp: seq[ovProcElem], procName: string, flags
   result = glue
 
 proc genOvCall(ctx: proxyDesc, ovp: seq[ovProc], procName: string, flags: ovFlags, bd: bindDesc): string {.compileTime.} =
-  let constructorMatter = if ovfConstructor in flags: " - 1" else: ""
-  var glue = "  let numArgs = L.getTop().int$1\n" % [constructorMatter]
+  var glue = "  let numArgs = L.getTop().int\n"
   for i in 0.. <ovp.len:
     let k = ovp[i]
     let prefix = if i == 0: "" else: "el"
@@ -1926,15 +1935,19 @@ proc bindSingleConstructor(ctx: proxyDesc, bd: bindDesc, n: NimNode, glueProc, p
   var glue = ""
   if bd.isClosure: glue.add addClosureEnv(SL, procName, n, bd)
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
-  glue.add "  var proxy = " & newUD(subjectName)
-  #always zeroed the memory if you mix gc code and unmanaged code
-  #otherwise, strange things will happened
-  if isRefOrObjectType(subject): glue.add "  zeroMem(proxy, sizeof(luaL_$1Proxy))\n" % [subjectName]
-  glue.add genOvCallSingle(ctx, newProcElem(retType, argList), procName, "", {ovfConstructor}, bd)
   if isRefType(subject):
-    glue.add "  if proxy.ud.isNil: return 0\n"
-    glue.add "  GC_ref(proxy.ud)\n"
-  glue.add "  L.nimGetMetatable(luaL_$1)\n" % [subjectName]
+    glue.add "  var proxy: NL_$1Proxy\n" % [subjectName]
+    glue.add genOvCallSingle(ctx, newProcElem(retType, argList), procName, "", {ovfConstructor}, bd)
+    glue.add "  let ret = getRegisteredUD[NL_$1Proxy](L, proxy)\n" % [subjectName]
+    glue.add "  if ret.isNil: return 0\n"
+  else:
+    glue.add "  var proxy = " & newUD(subjectName)
+    #always zeroed the memory if you mix gc code and unmanaged code
+    #otherwise, strange things will happened
+    if isObjectType(subject): glue.add "  zeroMem(proxy, sizeof(NL_$1Proxy))\n" % [subjectName]
+    glue.add genOvCallSingle(ctx, newProcElem(retType, argList), procName, "", {ovfConstructor}, bd)
+
+  glue.add "  L.nimGetMetatable(NL_$1)\n" % [subjectName]
   glue.add "  discard L.setMetatable(-2)\n"
   glue.add "  result = 1\n"
   result = glue
@@ -1967,6 +1980,31 @@ proc isDescendant(a, b: NimNode): bool {.compileTime.} =
 proc eqTypeOrDescendant(a, b: NimNode): bool {.compileTime.} =
   result = eqType(a, b) or isDescendant(a, b)
 
+proc getRegisteredUD*[T](L: PState, proxy: T): ptr T =
+  # get ref type userdata from REGISTRYINDEX
+  # if it's already there or create one if it's not there
+  # this help us to communicate with lua side from Nim
+  if proxy.ud == nil: return nil
+
+  assert(cast[int](proxy.ud) > NLMaxID)
+  L.pushLightUserData(cast[pointer](proxy.ud))
+  L.rawGet(LUA_REGISTRYINDEX)
+  if not L.isNil(-1): # name already in use?
+    result = cast[ptr T](L.toUserData(-1))
+    result.ud = proxy.ud
+    return result
+
+  L.pop(1) # pop nil
+  result = cast[ptr T](L.newUserData(sizeof(T)))
+  L.pushLightUserData(cast[pointer](proxy.ud))
+  L.pushValue(-2)
+  L.rawSet(LUA_REGISTRYINDEX)
+
+  #always zeroed the memory if you mix gc code and non gc code
+  zeroMem(result, sizeof(T))
+  result.ud = proxy.ud
+  GC_ref(result.ud)
+
 proc bindOverloadedConstructor(ctx: proxyDesc, bd: bindDesc, ov: NimNode, glueProc, procName, subjectName: string): string {.compileTime.} =
   var ovl = newSeq[ovProc]()
 
@@ -1993,15 +2031,19 @@ proc bindOverloadedConstructor(ctx: proxyDesc, bd: bindDesc, ov: NimNode, gluePr
     inc i
 
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
-  glue.add "  var proxy = cast[ptr luaL_$1Proxy](L.newUserData(sizeof(luaL_$1Proxy)))\n" % [subjectName]
-  #always zeroed the memory if you mix gc code and unmanaged code
-  #otherwise, strange things will happened
-  if isRefOrObjectType(subject): glue.add "  zeroMem(proxy, sizeof(luaL_$1Proxy))\n" % [subjectName]
-  glue.add genOvCall(ctx, ovl, procName, {ovfConstructor}, bd)
   if isRefType(subject):
-    glue.add "  if proxy.ud.isNil: return 0\n"
-    glue.add "  GC_ref(proxy.ud)\n"
-  glue.add "  L.nimGetMetatable(luaL_$1)\n" % [subjectName]
+    glue.add "  var proxy: NL_$1Proxy\n" % [subjectName]
+    glue.add genOvCall(ctx, ovl, procName, {ovfConstructor}, bd)
+    glue.add "  let ret = getRegisteredUD[NL_$1Proxy](L, proxy)\n" % [subjectName]
+    glue.add "  if ret.isNil: return 0\n"
+  else:
+    glue.add "  var proxy = " & newUD(subjectName)
+    #always zeroed the memory if you mix gc code and unmanaged code
+    #otherwise, strange things will happened
+    if isObjectType(subject): glue.add "  zeroMem(proxy, sizeof(NL_$1Proxy))\n" % [subjectName]
+    glue.add genOvCall(ctx, ovl, procName, {ovfConstructor}, bd)
+
+  glue.add "  L.nimGetMetatable(NL_$1)\n" % [subjectName]
   glue.add "  discard L.setMetatable(-2)\n"
   glue.add "  result = 1\n"
   result = glue
@@ -2029,7 +2071,7 @@ proc bindObjectSingleMethod(ctx: proxyDesc, bd: bindDesc, n: NimNode, glueProc, 
   var glue = ""
   if bd.isClosure: glue.add addClosureEnv(SL, procName, n, bd)
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
-  glue.add "  var proxy = " & checkUD(subjectName, "1", $subject)
+  glue.add "  var proxy = " & checkUD(subjectName, "1")
   glue.add "  if proxy.isNil: return 0\n"
   glue.add genOvCallSingle(ctx, newProcElem(retType, argList), procName, "", {ovfUseObject, ovfUseRet}, bd)
   result = glue
@@ -2068,7 +2110,7 @@ proc bindObjectOverloadedMethod(ctx: proxyDesc, bd: bindDesc, ov: NimNode, glueP
     return glue
 
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
-  glue.add "  var proxy = " & checkUD(subjectName, "1", $subject)
+  glue.add "  var proxy = " & checkUD(subjectName, "1")
   glue.add "  if proxy.isNil: return 0\n"
   glue.add genOvCall(ctx, ovl, procName, {ovfUseObject, ovfUseRet}, bd)
   glue.add "  discard L.error(\"$1: invalid param count\")\n" % [procName]
@@ -2083,7 +2125,7 @@ proc bindGetter(ctx: proxyDesc, glueProc, propName, subjectName: string, propTyp
     procName = $subject & "." & propName
 
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
-  glue.add "  var proxy = " & checkUD(subjectName, "1", $subject)
+  glue.add "  var proxy = " & checkUD(subjectName, "1")
   glue.add "  if proxy.isNil: return 0\n"
   glue.add constructRet(propType, procCall, "  ", procName)
   glue.add "  return 1\n"
@@ -2098,7 +2140,7 @@ proc bindSetter(ctx: proxyDesc, glueProc, propName, subjectName: string, propTyp
     procName = $subject & "." & propName
 
   glue.add "proc " & glueProc & "(L: PState): cint {.cdecl.} =\n"
-  glue.add "  var proxy = " & checkUD(subjectName, "1", $subject)
+  glue.add "  var proxy = " & checkUD(subjectName, "1")
   glue.add "  if proxy.isNil: return 0\n"
   glue.add "  $1 = $2" % [procCall, constructArg(ctx, propType, 2, procName, needCheck)]
   glue.add "  return 0\n"
@@ -2133,7 +2175,7 @@ proc bindObjectImpl*(ctx: proxyDesc): NimNode {.compileTime.} =
 
   gContext.setLen 0
   let subjectName = registerObject(subject)
-  var glue = "discard $1.nimNewMetatable(luaL_$2)\n" % [SL, subjectName]
+  var glue = "discard $1.nimNewMetatable(NL_$2)\n" % [SL, subjectName]
   var regs = "var regs$1$2 = [\n" % [subjectName, $regsCount]
 
   for i in 0..arg.len-1:
@@ -2174,22 +2216,22 @@ proc bindObjectImpl*(ctx: proxyDesc): NimNode {.compileTime.} =
         error("'$1': not a prop of $2" % [propName, $subjectT[0]])
 
       if n.getter:
-        regs.add "  luaL_Reg(name: \"_get_$1\", fn: $2),\n" % [n.name, getterProc]
+        regs.add "  luaL_reg(name: \"_get_$1\", fn: $2),\n" % [n.name, getterProc]
         glue.add bindGetter(ctx, getterProc, propName, subjectName, propType, subject)
 
       if n.setter:
-        regs.add "  luaL_Reg(name: \"_set_$1\", fn: $2),\n" % [n.name, setterProc]
+        regs.add "  luaL_reg(name: \"_set_$1\", fn: $2),\n" % [n.name, setterProc]
         glue.add bindSetter(ctx, setterProc, propName, subjectName, propType, subject)
 
       inc proxyCount
 
   if isRefType(subject) and not hasName("dtor" & $subject):
     glue.add "proc $1_destructor(L: PState): cint {.cdecl.} =\n" % [subjectName]
-    glue.add "  var proxy = " & checkUD(subjectName, "1", $subject)
+    glue.add "  var proxy = " & checkUD(subjectName, "1")
     glue.add "  if proxy.isNil: return 0\n"
     glue.add "  GC_unref(proxy.ud)\n"
     glue.add "  proxy.ud = nil\n"
-    regs.add "  luaL_Reg(name: \"__gc\", fn: $1_destructor),\n" % [subjectName]
+    regs.add "  luaL_reg(name: \"__gc\", fn: $1_destructor),\n" % [subjectName]
     setName("dtor" & $subject)
 
   regs.add "  luaL_Reg(name: nil, fn: nil)\n"
@@ -2214,6 +2256,29 @@ macro bindObject*(arg: varargs[untyped]): untyped =
 # use this macro to generate alias for object meta table name dan proxy name
 macro getRegisteredType*(obj: typed, metaTableName, proxyName: untyped): untyped =
   let subjectName = registerObject(obj)
-  var glue = "type $1 = luaL_$2Proxy\n" % [$proxyName, subjectName]
-  glue.add "const $1 = luaL_$2\n" % [$metaTableName, subjectName]
+  var glue = "type $1 = NL_$2Proxy\n" % [$proxyName, subjectName]
+  glue.add "const $1 = NL_$2\n" % [$metaTableName, subjectName]
   result = parseCode(glue)
+
+macro getRegisteredProxy*(obj: typed, proxyName: untyped): untyped =
+  let subjectName = registerObject(obj)
+  var glue = "type $1 = NL_$2Proxy\n" % [$proxyName, subjectName]
+  result = parseCode(glue)
+
+macro getRegisteredMetaTable*(obj: typed, metaTableName: untyped): untyped =
+  let subjectName = registerObject(obj)
+  var glue = "const $1 = NL_$2\n" % [$metaTableName, subjectName]
+  result = parseCode(glue)
+
+macro instantiateRegisteredProxy(obj: typed): untyped =
+  let n = getTypeImpl(obj)
+  assert(n.kind == nnkBracketExpr)
+  var glue = "type pxName = object\n"
+  glue.add "  ud: $1\n" % [$n[1]]
+  glue.add "let px = pxName(ud: objRef)\n"
+  glue.add "let proxy = getRegisteredUD[pxName](L, px)\n"
+  glue.add "result = proxy.ud\n"
+  result = parseCode(glue)
+
+proc getUD*[T: ref](L: PState, objRef: T): T =
+  instantiateRegisteredProxy(T)
