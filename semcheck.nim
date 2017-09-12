@@ -814,11 +814,16 @@ proc constOpGE(lay: Layout, a, b, op: Node) =
   else: internalError(lay, errUnknownOperation, a.kind, ">=", b.kind)
 
 proc constOp(lay: Layout, a, b, op: Node, id: SpecialWords) =
-  case id
-  of wEquals: lay.constOpEQ(a, b, op)
-  of wGreaterOrEqual: lay.constOpGE(a, b, op)
-  of wLessOrEqual: lay.constOpLE(a, b, op)
-  else: internalError(lay, errUnknownEqualityOpr, id)
+  try:
+    case id
+    of wEquals: lay.constOpEQ(a, b, op)
+    of wGreaterOrEqual: lay.constOpGE(a, b, op)
+    of wLessOrEqual: lay.constOpLE(a, b, op)
+    else: internalError(lay, errUnknownEqualityOpr, id)
+  except UnsatisfiableConstraintException:
+    lay.sourceError(errUnsatisfiableConstraint, op)
+  except:
+    raise getCurrentException()
 
 proc secChoiceList(lay: Layout, lhs, rhs, op: Node, opId: SpecialWords) =
   if rhs.kind != nkChoiceList: lay.sourceError(errUnbalancedArm, op)

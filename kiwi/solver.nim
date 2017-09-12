@@ -21,7 +21,7 @@ type
         constant: float
 
     DuplicateConstraintException = object of Exception
-    UnsatisfiableConstraintException = object of Exception
+    UnsatisfiableConstraintException* = object of Exception
     UnknownConstraintException = object of Exception
     InternalSolverError = object of Exception
     DuplicateEditVariableException = object of Exception
