@@ -415,6 +415,10 @@ proc computeIdx(lay: Layout, n: Node): int =
   case n.kind
   of nkEmpty: result = -1
   of nkUInt: result = int(n.uintVal)
+  of nkFloat:
+    lay.sourceError(errFloatNotAllowed, n)
+  of nkString:
+    lay.sourceError(errFloatNotAllowed, n)
   of nkInfix:
     let op  = toKeyword(n[0])
     let lhs = lay.computeIdx(n[1])

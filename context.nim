@@ -81,6 +81,7 @@ type
     errUnknownOperation
     errIllegalOperation
     errStringNotAllowed
+    errFloatNotAllowed
     errNoValidBranch
     errIllegalPrefixOpr
     errUnknownPrefixOpr
@@ -128,7 +129,7 @@ const
     errInvalidExpresion: "invalid expression",
     errOnlyAsgnAllowed: "only assignment allowed here",
     errConstOprNeeded: "one of constraint [in]equality needed: `=`, `<=`, `>=`",
-    errPropExpected: "prop expected",
+    errPropExpected: "prop expected, missing '.' perhaps?",
 
     # semcheck`s errors
     errUnknownNode: "unknown node $1",
@@ -148,6 +149,7 @@ const
     errUnknownOperation: "unknown operation $1 $2 $3",
     errIllegalOperation: "illegal operation $1 $2 $3",
     errStringNotAllowed: "string not allowed here",
+    errFloatNotAllowed: "float not allowed here",
     errNoValidBranch: "no valid branch of choices",
     errIllegalPrefixOpr: "illegal prefix operator: `$1`",
     errUnknownPrefixOpr: "unknown prefix operator: `$1`",
