@@ -15,7 +15,7 @@ type
     tkParLe, tkParRi, tkCurlyLe, tkCurlyRi, tkBracketLe, tkBracketRi
 
     tkDot, tkDotDot, tkColon, tkColonColon
-    tkBang, tkChoice
+    tkBang, tkChoice, tkAt
     tkEquals, tkGreaterOrEqual, tkLessOrEqual, tkOpr
 
     tkProgram, tkStyle, tkAlias, tkFlex, tkEvent, tkProp

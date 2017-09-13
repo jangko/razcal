@@ -33,7 +33,6 @@ template withInd(p, body: untyped) =
 
 template realInd(p): bool = p.tok.indent > p.currInd
 template sameInd(p): bool = p.tok.indent == p.currInd
-template sameOrNoInd(p): bool = p.tok.indent == p.currInd or p.tok.indent < 0
 
 proc optPar(p: var Parser) =
   if p.tok.indent >= 0:
@@ -356,13 +355,13 @@ proc parseViewBody(p: var Parser): Node =
   withInd(p):
     while sameInd(p):
       case p.tok.kind
-      of tkProp:
+      of tkProp, tkColon:
         let list = parsePropList(p)
         addSon(result, list)
-      of tkEvent:
+      of tkEvent, tkBang:
         let list = parseEventList(p)
         addSon(result, list)
-      of tkFlex:
+      of tkFlex, tkAt:
         let list = parseConstList(p)
         addSon(result, list)
       of tkEof:

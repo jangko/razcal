@@ -5,7 +5,7 @@ type
     # operators
     wPlus, wMinus, wMul, wDiv
     wDot, wDotDot, wColon, wColonColon      # this two section
-    wBang, wChoice                          # must match with
+    wBang, wChoice, wAt                     # must match with
     wEquals, wGreaterOrEqual, wLessOrEqual  # TokenKind's order
     # keyword                               # to ensure proper
     wProgram, wStyle, wAlias                # token generated
@@ -46,7 +46,7 @@ const
   specialWords* = [
     "+", "-", "*", "/",
     ".", "..", ":", "::",
-    "!", "|",
+    "!", "|", "@",
     "=", ">=", "<=",
 
     "program", "style", "alias",

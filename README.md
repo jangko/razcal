@@ -68,6 +68,9 @@ documentation none, tutorial none.
   * ~call lua from nim~
 * renderer
   * bring up crude renderer to design backend api
+    * ~test glfw~
+    * test nanovg on glfw
+    * render something from razcal on nanovg
 * test suite
   * robust test suite for both Nim and Lua side
   * automated build system + test

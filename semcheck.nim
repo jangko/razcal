@@ -20,10 +20,12 @@ proc newInternalError(fileName: string, line: int, msg: string): InternalError =
   result.line = line
   result.fileName = fileName
 
+# like assert, but better
 template ensure(cond: bool) =
   if not cond: raise newInternalError(instantiationInfo().fileName,
     instantiationInfo().line, astToStr(cond))
 
+# convert identNode to SpecialWords
 proc toKeyWord(n: Node): SpecialWords =
   ensure(n.kind == nkIdent)
   if n.ident.id > 0 and n.ident.id <= ord(high(SpecialWords)):
@@ -31,6 +33,7 @@ proc toKeyWord(n: Node): SpecialWords =
   else:
     result = wInvalid
 
+# create view & view node as a child of last parent
 proc createView(lay: Layout, n: Node): Node =
   var view = lay.lastView.newView(n.ident)
   result   = newViewSymbol(n, view).newSymbolNode()
@@ -38,6 +41,7 @@ proc createView(lay: Layout, n: Node): Node =
   lay.viewTbl[view] = result
   lay.solver.setBasicConstraint(view)
 
+# one application can have multiple layout a.k.a 'page'
 proc newLayout*(id: int, context: Context): Layout =
   new(result)
   result.id = id
@@ -59,8 +63,9 @@ proc getRoot(lay: Layout): View =
 proc getIdent(lay: Layout, s: string): Ident =
   result = lay.context.getIdent(s)
 
-proc internalErrorImpl(lay: Layout, kind: MsgKind, fileName: string, line: int, args: varargs[string, `$`]) =
-  # internal error aid debugging
+proc internalErrorImpl(lay: Layout, kind: MsgKind,
+  fileName: string, line: int, args: varargs[string, `$`]) =
+  # internal error provide debugging information
   raise newInternalError(fileName, line, lay.context.msgKindToString(kind, args))
 
 template internalError(lay: Layout, kind: MsgKind, args: varargs[string, `$`]) =
@@ -72,6 +77,7 @@ template internalError(lay: Layout, kind: MsgKind, args: varargs[string, `$`]) =
     args)
 
 proc otherError(lay: Layout, kind: MsgKind, args: varargs[string, `$`]) =
+  # not internal error and not source error
   lay.context.otherError(kind, args)
 
 proc getCurrentLine*(lay: Layout, info: context.LineInfo): string =
@@ -191,8 +197,9 @@ proc semView(lay: Layout, n: Node) =
   n[2] = lay.semViewBody(n[2])
 
 proc subst(lay: Layout, n: Node, cls: ClassContext): Node =
+  # substitute node with param symNode
   case n.kind
-  of nkFlexList, nkFlex, nkDotCall, nkChoice, nkInfix, nkBracketExpr:
+  of NodeWithSons:
     for i in 0.. <n.len:
       n[i] = lay.subst(n[i], cls)
     result = n
@@ -202,12 +209,14 @@ proc subst(lay: Layout, n: Node, cls: ClassContext): Node =
       sym.sym.flags.incl(sfUsed)
       return sym
     result = n
-  of nkUint:
+  of nkUint, nkString, nkInt:
     result = n
   else:
     internalError(lay, errUnknownNode, n.kind)
 
 proc substituteParams(lay: Layout, n: Node, cls: ClassContext) =
+  # iterate over class body and substitue it with param
+  # if any, then report unused param if any
   for i in 0.. <n.len:
     n[i] = lay.subst(n[i], cls)
 
@@ -216,6 +225,8 @@ proc substituteParams(lay: Layout, n: Node, cls: ClassContext) =
       lay.sourceWarning(warnParamNotUsed, s, s.sym.name)
 
 proc collectParams(lay: Layout, n: Node, cls: ClassContext) =
+  # build param symbol table and it's default value if any
+  # check for duplicate param's nama
   if n.kind == nkEmpty: return
   ensure(n.kind == nkClassParams)
   for i in 0.. <n.len:
@@ -240,6 +251,7 @@ proc collectParams(lay: Layout, n: Node, cls: ClassContext) =
       internalError(lay, errUnknownNode, m.kind)
 
 proc semClass(lay: Layout, n: Node) =
+  # create class and check for duplicate
   ensure(n.len == 3)
   let className = n[0]
   var symNode = lay.classTbl.getOrDefault(className.ident)
@@ -274,6 +286,8 @@ proc semTopLevel*(lay: Layout, n: Node) =
 proc secViewBody(lay: Layout, n: Node)
 
 proc checkParamCountMatch(lay: Layout, params, classParams: Node) =
+  # view can have many class and we need to check if the param
+  # count match
   if classParams.kind == nkEmpty:
     if params.len > 0:
       lay.sourceError(errParamCountNotMatch, params, 0, params.len)
@@ -299,8 +313,10 @@ proc checkParamCountMatch(lay: Layout, params, classParams: Node) =
       lay.sourceError(errParamCountNotMatch, params, count, params.len)
 
 proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
+  # replace each param with value supplied from view or
+  # class's param default value
   case n.kind
-  of nkStmtList, nkFlexList, nkFlex, nkDotCall, nkChoice, nkInfix, nkBracketExpr:
+  of NodeWithSons:
     for i in 0.. <n.len:
       n[i] = lay.instClass(n[i], cls, params)
     result = n
@@ -309,7 +325,7 @@ proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
       result = params[n.sym.pos]
     else:
       result = n.sym.value
-  of nkIdent, nkUInt:
+  of nkIdent, nkUInt, nkString:
     result = n
   else:
     internalError(lay, errUnknownNode, n.kind)
@@ -317,14 +333,17 @@ proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
 proc instantiateClass(lay: Layout, cls: ClassContext, params: Node): Node =
   # copy only the class body which is essentialy
   # has the same structure with view body
+  # then instantiate it
   var n = cls.n[2].copyTree()
   for i in 0.. <n.len:
     n[i] = lay.instClass(n[i], cls, params)
 
+  # don't forget to check instantiated class
   lay.secViewbody(n)
   result = n
 
 proc secViewClass(lay: Layout, n: Node) =
+  # the view have classes
   ensure(n.kind in {nkViewClassList, nkEmpty})
   for vc in n.sons:
     ensure(vc.kind == nkViewClass)
@@ -357,6 +376,7 @@ proc selectViewProp(lay: Layout, view: View, id: SpecialWords): Variable =
     internalError(lay, errUnknownProp, id)
 
 proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
+  # get a view related to `this` view
   # idx = -1 means the last
   case id
   of wThis:
@@ -389,6 +409,8 @@ proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
     internalError(lay, errUnknownRel, id)
 
 proc computeIdx(lay: Layout, n: Node): int =
+  # compute integer index used by something like
+  # prev[idx].left
   result = 1
   case n.kind
   of nkEmpty: result = -1
@@ -406,6 +428,7 @@ proc computeIdx(lay: Layout, n: Node): int =
   else: internalError(lay, errUnknownNode, n.kind)
 
 proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): Node =
+  # here we try to validate an term
   case n.kind
   of nkIdent:
     let id = toKeyWord(n)
@@ -661,6 +684,7 @@ proc unaryTermOp(lay: Layout, operand, op: Node, id: SpecialWords): Node =
   else: internalError(lay, errUnknownPrefixOpr, id)
 
 proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
+  # here we try to validate an expression
   case n.kind
   of nkIdent:
     let id = toKeyWord(n)
@@ -689,6 +713,8 @@ proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
   of nkString:
     lay.sourceError(errStringNotAllowed, n)
   of nkChoice:
+    # choose among choices, we pick first valid one
+    # expr1 | expr2 | expr3
     for cc in n.sons:
       result = lay.secConstExpr(cc, true)
       if result.kind != nkEmpty: return result
@@ -833,7 +859,7 @@ proc secChoiceList(lay: Layout, lhs, rhs, op: Node, opId: SpecialWords) =
     rhs[i] = lay.secConstExpr(rhs[i])
     lay.constOp(lhs[i], rhs[i], op, opId)
 
-proc secConstList(lay: Layout, n: Node) =
+proc secFlexList(lay: Layout, n: Node) =
   ensure(n.kind == nkFlexList)
   for cc in n.sons:
     ensure(cc.kind == nkFlex)
@@ -861,7 +887,7 @@ proc secViewBody(lay: Layout, n: Node) =
   ensure(n.kind in {nkStmtList, nkEmpty})
   for m in n.sons:
     case m.kind
-    of nkFlexList: lay.secConstList(m)
+    of nkFlexList: lay.secFlexList(m)
     of nkEventList: lay.secEventList(m)
     of nkPropList:  lay.secPropList(m)
     of nkEmpty: discard
@@ -952,6 +978,11 @@ proc luaBinding(lay: Layout) =
 proc semCheck*(lay: Layout, n: Node) =
   lay.luaBinding()
 
+  lay.solver.addConstraint(lay.root.top == 0)
+  lay.solver.addConstraint(lay.root.left == 0)
+  lay.solver.addConstraint(lay.root.width == 640)
+  lay.solver.addConstraint(lay.root.height == 480)
+
   # semcheck first pass
   # collecting symbols
   # resolve view hierarchy
@@ -968,7 +999,6 @@ proc semCheck*(lay: Layout, n: Node) =
   # attaching event handler to view
   lay.secTopLevel(n)
 
-  #echo n.treeRepr
   lay.solver.updateVariables()
   lay.context.executeLua("apple.lua")
 

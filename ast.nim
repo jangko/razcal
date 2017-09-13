@@ -100,6 +100,12 @@ type
       sons*: seq[Node]
     lineInfo*: LineInfo
 
+const
+  NodeWithVal* = {nkInt, nkUInt, nkFloat, nkString, nkCharLit,
+    nkIdent, nkSymbol, nkConstraint, nkConstExpr, nkConstTerm, nkConstVar}
+
+  NodeWithSons* = {low(NodeKind)..high(NodeKind)} - NodewithVal
+
 proc newNode*(kind: NodeKind): Node =
   new(result)
   result.kind = kind
@@ -168,8 +174,6 @@ proc val*(n: Node): string =
   else: result = ""
 
 proc treeRepr*(n: Node, indent = 0): string =
-  const NodeWithVal = {nkInt, nkUInt, nkFloat, nkString, nkCharLit, nkIdent, nkSymbol,
-    nkConstraint, nkConstExpr, nkConstTerm, nkConstVar}
   let spaces = repeat(' ', indent)
   if n.isNil: return spaces & "nil\n"
   let val = n.val
