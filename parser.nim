@@ -300,6 +300,7 @@ proc parseFlexList(p: var Parser): Node =
     while sameInd(p):
       while p.tok.kind == tkSemiColon or p.tok.indent >= p.currInd:
         if p.tok.kind == tkSemiColon: p.getTok()
+        p.optPar()
         let n = parseFlex(p)
         if n.kind == nkEmpty:
           #p.error(errExprExpected)
