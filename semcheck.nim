@@ -429,6 +429,13 @@ proc computeIdx(lay: Layout, n: Node): int =
     of wMul: result = lhs * rhs
     of wDiv: result = lhs div rhs
     else: internalError(lay, errUnknownBinaryOpr, op)
+  of nkPrefix:
+    let op = toKeyword(n[0])
+    let operand = lay.computeIdx(n[1])
+    case op
+    of wMinus: result = -operand
+    of wPlus: result = abs(operand)
+    else: lay.sourceError(errIllegalPrefix, n[0], '-', operand)
   else: internalError(lay, errUnknownNode, n.kind)
 
 proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): Node =
