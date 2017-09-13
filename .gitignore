@@ -1,4 +1,5 @@
 *.raz
+*.lua
 *.exe
 *.dll
 *.so
