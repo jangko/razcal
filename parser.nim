@@ -272,7 +272,7 @@ proc parseChoiceList(p: var Parser): Node =
   else:
     result = choice
 
-proc parseConst(p: var Parser): Node =
+proc parseFlex(p: var Parser): Node =
   const constOpr = [tkEquals, tkGreaterOrEqual, tkLessOrEqual]
   var choice = p.parseChoiceList()
   if choice.kind == nkEmpty: return choice
@@ -293,17 +293,19 @@ proc parseConst(p: var Parser): Node =
   else:
     p.error(errConstOprNeeded)
 
-proc parseConstList(p: var Parser): Node =
+proc parseFlexList(p: var Parser): Node =
   p.getTok() # skip tkFlex
   result = p.emptyNode
   withInd(p):
     while sameInd(p):
-      let n = parseConst(p)
-      if n.kind == nkEmpty:
-        #p.error(errExprExpected)
-        return n
-      if result.kind == nkEmpty: result = newNodeP(p, nkFlexList)
-      addSon(result, n)
+      while p.tok.kind == tkSemiColon or p.tok.indent >= p.currInd:
+        if p.tok.kind == tkSemiColon: p.getTok()
+        let n = parseFlex(p)
+        if n.kind == nkEmpty:
+          #p.error(errExprExpected)
+          return n
+        if result.kind == nkEmpty: result = newNodeP(p, nkFlexList)
+        addSon(result, n)
 
 proc parseEvent(p: var Parser): Node =
   if p.tok.kind != tkIdent:
@@ -362,7 +364,8 @@ proc parseViewBody(p: var Parser): Node =
         let list = parseEventList(p)
         addSon(result, list)
       of tkFlex, tkAt:
-        let list = parseConstList(p)
+        let list = parseFlexList(p)
+        echo list.treeRepr
         addSon(result, list)
       of tkEof:
         break

@@ -377,7 +377,7 @@ proc selectViewProp(lay: Layout, view: View, id: SpecialWords): Variable =
 
 proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
   # get a view related to `this` view
-  # idx = -1 means the last
+  # idx < 0 means the last
   case id
   of wThis:
     result = view
@@ -390,18 +390,18 @@ proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
         result = result.parent
         inc i
   of wChild:
-    if idx < 0: return view.children[^1]
+    if idx < 0 and view.parent.children.len > 0: return view.children[^1]
     if idx < view.children.len:
       result = view.children[idx]
   of wPrev:
     if not view.parent.isNil:
-      if idx < 0: return view.parent.children[0]
+      if idx < 0 and view.parent.children.len > 0: return view.parent.children[0]
       let i = view.idx - idx
       if i >= 0 and i < view.parent.children.len:
         result = view.parent.children[i]
   of wNext:
     if not view.parent.isNil:
-      if idx < 0: return view.parent.children[^1]
+      if idx < 0 and view.parent.children.len > 0: return view.parent.children[^1]
       let i = view.idx + idx
       if i < view.parent.children.len:
         result = view.parent.children[i]
@@ -438,6 +438,25 @@ proc computeIdx(lay: Layout, n: Node): int =
     else: lay.sourceError(errIllegalPrefix, n[0], '-', operand)
   else: internalError(lay, errUnknownNode, n.kind)
 
+proc findRelation(lay: Layout, n: Node, id: SpecialWords, idx = 1, useBracket = false): View =
+  # first find from relative relation
+  if id in constRel:
+    result = lay.selectViewRel(lay.lastView, id, idx)
+    return result
+
+  # find among child
+  result = lay.lastView.views.getOrDefault(n.ident)
+  if result != nil and useBracket:
+    if idx < 0 and result.children.len > 0: return result.children[^1]
+    if idx >= 0 and idx < result.children.len: return result.children[idx]
+
+  # find among siblings
+  if result.isNil and lay.lastView.parent != nil:
+    result = lay.lastView.parent.views.getOrDefault(n.ident)
+    if result != nil and useBracket:
+      if idx < 0 and result.children.len > 0: return result.children[^1]
+      if idx >= 0 and idx < result.children.len: return result.children[idx]
+
 proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): Node =
   # here we try to validate an term
   case n.kind
@@ -450,8 +469,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       else:
         lay.sourceError(errUndefinedVar, n, n.ident)
     else:
-      let view = if id in constRel: lay.selectViewRel(lay.lastView, id)
-        else: lay.lastView.views.getOrDefault(n.ident)
+      let view = lay.findRelation(n, id)
       if view.isNil:
         if choiceMode: return lay.emptyNode
         else: lay.sourceError(errRelationNotFound, n, n.ident, lay.lastView.name)
@@ -473,7 +491,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
     let id = toKeyWord(n[0])
     if id in constRel:
       let idx  = lay.computeIdx(n[1])
-      let view = lay.selectViewRel(lay.lastView, id, idx)
+      let view = lay.findRelation(n[0], id, idx, true)
       if view.isNil:
         if choiceMode: return lay.emptyNode
         else: lay.sourceError(errWrongRelationIndex, n[1], idx)
@@ -863,7 +881,8 @@ proc constOp(lay: Layout, a, b, op: Node, id: SpecialWords) =
     raise getCurrentException()
 
 proc secChoiceList(lay: Layout, lhs, rhs, op: Node, opId: SpecialWords) =
-  if rhs.kind != nkChoiceList: lay.sourceError(errUnbalancedArm, op)
+  if rhs.kind != nkChoiceList or lhs.kind != nkChoiceList:
+    lay.sourceError(errUnbalancedArm, op)
   if rhs.len != lhs.len: lay.sourceError(errUnbalancedArm, op)
   for i in 0.. <lhs.len:
     lhs[i] = lay.secConstExpr(lhs[i])
@@ -881,7 +900,7 @@ proc secFlexList(lay: Layout, n: Node) =
       let rhs = cc.sons[i+2]
       let opId = toKeyWord(op)
       ensure(opId in constOpr)
-      if lhs.kind == nkChoiceList:
+      if lhs.kind == nkChoiceList or rhs.kind == nkChoiceList:
         lay.secChoiceList(lhs, rhs, op, opId)
       else:
         cc.sons[i] = lay.secConstExpr(lhs)
