@@ -2,8 +2,10 @@ type
   SpecialWords* = enum
     wInvalid
 
-    # operators
+    # arithmetic operators
     wPlus, wMinus, wMul, wDiv
+
+    # operator
     wDot, wDotDot, wColon, wColonColon      # this two section
     wBang, wChoice, wAt                     # must match with
     wEquals, wGreaterOrEqual, wLessOrEqual  # TokenKind's order

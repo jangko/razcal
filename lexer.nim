@@ -8,12 +8,15 @@ type
     fileIndex*: int32
     c: char
 
+  # this must be keep in sync with TokenKindToStr array
   TokenKind* = enum
     tkInvalid, tkEof, tkComment, tkNestedComment
     tkIdent, tkNumber, tkFloat, tkString, tkCharLit
     tkSemiColon, tkAccent, tkComma
     tkParLe, tkParRi, tkCurlyLe, tkCurlyRi, tkBracketLe, tkBracketRi
 
+    # tkDot..tkProp must be keep in sync with
+    # keywords.SpecialWords
     tkDot, tkDotDot, tkColon, tkColonColon
     tkBang, tkChoice, tkAt
     tkEquals, tkGreaterOrEqual, tkLessOrEqual, tkOpr
@@ -40,6 +43,13 @@ const
   BinaryDigits   = {'0'..'1'}
   OpChars        = {'+', '-', '*', '/', '\\', '<', '>', '!', '?', '^', '.',
                     '|', '=', '%', '&', '$', '@', '~', ':', '\x80'..'\xFF'}
+
+  TokenKindToStr*: array[TokenKind, string] = [
+    "tkInvalid", "[EOF]", "tkComment", "tkNestedComment",
+    "tkIdent", "tkNumber", "tkFloat", "tkString", "tkCharLit",
+    ";", "`", ",", "(", ")", "{", "}", "[", "]",
+    ".", "..", ":", "::", "!", "|", "@", "=", ">=", "<=", "tkOpr",
+    "program", "style", "alias", "flex", "event", "prop"]
 
 const
   Tabulator* = '\x09'

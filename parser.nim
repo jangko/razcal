@@ -46,7 +46,7 @@ proc eat(p: var Parser, kind: TokenKind) =
   if p.tok.kind == kind:
     p.getTok()
   else:
-    p.error(errTokenExpected, kind)
+    p.error(errTokenExpected, "`" & TokenKindToStr[kind] & "`")
 
 proc getLineInfo(p: Parser): LineInfo =
   result.line = int16(p.tok.line)
