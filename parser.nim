@@ -302,9 +302,8 @@ proc parseFlexList(p: var Parser): Node =
         if p.tok.kind == tkSemiColon: p.getTok()
         p.optPar()
         let n = parseFlex(p)
-        if n.kind == nkEmpty:
-          #p.error(errExprExpected)
-          return n
+        # if no more flex, we finish here
+        if n.kind == nkEmpty: return result
         if result.kind == nkEmpty: result = newNodeP(p, nkFlexList)
         addSon(result, n)
 
@@ -366,7 +365,6 @@ proc parseViewBody(p: var Parser): Node =
         addSon(result, list)
       of tkFlex, tkAt:
         let list = parseFlexList(p)
-        echo list.treeRepr
         addSon(result, list)
       of tkEof:
         break

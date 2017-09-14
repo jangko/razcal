@@ -14,7 +14,7 @@ type
     wEvent, wProp, wFlex
 
     # constraint relative
-    wThis, wParent, wChild, wPrev, wNext
+    wThis, wRoot, wParent, wChild, wPrev, wNext
 
     # view's basic constraint field
     wLeft, wRight, wTop, wBottom
@@ -54,7 +54,7 @@ const
     "program", "style", "alias",
     "flex", "event", "prop",
 
-    "this", "parent", "child", "prev", "next",
+    "this", "root", "parent", "child", "prev", "next",
     "left", "right", "top", "bottom",
     "width", "height", "centerX", "centerY",
 
@@ -77,11 +77,11 @@ const
     "dragOver", "dragStart", "onDrop",
   ]
 
-  constOpr* = {wEquals, wGreaterOrEqual, wLessOrEqual}
-  constRel* = {wThis, wParent, wChild, wPrev, wNext}
-  constProp* = {wLeft..wCenterY}
-  constBinaryTermOp* = {wPlus, wMinus, wMul, wDiv}
-  constUnaryTermOp* = {wMinus}
+  flexOpr* = {wEquals, wGreaterOrEqual, wLessOrEqual}
+  flexRel* = {wThis..wNext}
+  flexProp* = {wLeft..wCenterY}
+  flexBinaryTermOp* = {wPlus, wMinus, wMul, wDiv}
+  flexUnaryTermOp* = {wMinus}
 
   validEvents* = {wClick..wOnDrop}
   validProps* = {wContent..wIcon}

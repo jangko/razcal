@@ -354,6 +354,8 @@ proc secViewClass(lay: Layout, n: Node) =
     let classSymbol = lay.classTbl.getOrDefault(name.ident)
     if classSymbol.isNil:
       lay.sourceError(errClassNotFound, name, name.ident.s)
+    # mark it as used
+    classSymbol.sym.flags.incl(sfUsed)
     # replace name with symbol
     vc.sons[0] = classSymbol
     let class = classSymbol.sym.class
@@ -379,8 +381,8 @@ proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
   # get a view related to `this` view
   # idx < 0 means the last
   case id
-  of wThis:
-    result = view
+  of wThis: result = view
+  of wRoot: result = lay.root
   of wParent:
     result = view.parent
     if idx > 1:
@@ -440,7 +442,7 @@ proc computeIdx(lay: Layout, n: Node): int =
 
 proc findRelation(lay: Layout, n: Node, id: SpecialWords, idx = 1, useBracket = false): View =
   # first find from relative relation
-  if id in constRel:
+  if id in flexRel:
     result = lay.selectViewRel(lay.lastView, id, idx)
     return result
 
@@ -463,8 +465,8 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
   of nkIdent:
     let id = toKeyWord(n)
     if n.ident == lastIdent:
-      if id in constProp:
-        result = newNodeI(nkConstVar, n.lineInfo)
+      if id in flexProp:
+        result = newNodeI(nkFlexVar, n.lineInfo)
         result.variable = lay.selectViewProp(lay.lastView, id)
       else:
         lay.sourceError(errUndefinedVar, n, n.ident)
@@ -489,7 +491,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
     ensure(n.len == 2)
     ensure(n[0].kind == nkIdent)
     let id = toKeyWord(n[0])
-    if id in constRel:
+    if id in flexRel:
       let idx  = lay.computeIdx(n[1])
       let view = lay.findRelation(n[0], id, idx, true)
       if view.isNil:
@@ -516,101 +518,101 @@ proc termOpPlus(lay: Layout, a, b, op: Node): Node =
   if a.kind in numberNode and b.kind in numberNode:
     result = newNodeI(nkFloat, a.lineInfo)
     result.floatVal = a.toNumber() + b.toNumber()
-  elif a.kind in numberNode and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.toNumber() + b.variable
-  elif a.kind in numberNode and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.toNumber() + b.expression
-  elif a.kind in numberNode and b.kind == nkConstTerm:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.toNumber() + b.term
-  elif a.kind == nkConstVar and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind in numberNode:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.variable + b.toNumber()
-  elif a.kind == nkConstVar and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.variable + b.expression
-  elif a.kind == nkConstVar and b.kind == nkConstTerm:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.variable + b.term
-  elif a.kind == nkConstVar and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.variable + b.variable
-  elif a.kind == nkConstExpr and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind in numberNode:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression + b.toNumber()
-  elif a.kind == nkConstExpr and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression + b.variable
-  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression + b.expression
-  elif a.kind == nkConstExpr and b.kind == nkConstTerm:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression + b.term
-  elif a.kind == nkConstTerm and b.kind == nkConstTerm:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.term + b.term
-  elif a.kind == nkConstTerm and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.term + b.expression
-  elif a.kind == nkConstTerm and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.term + b.variable
-  elif a.kind == nkConstTerm and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind in numberNode:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.term + b.toNumber()
   else: internalError(lay, errUnknownOperation, a.kind, "'+'", b.kind)
 
 proc termOpMinus(lay: Layout, a, b, op: Node): Node =
-  if a.kind == nkConstExpr and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  if a.kind == nkFlexExpr and b.kind in numberNode:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression - b.toNumber()
-  elif a.kind == nkConstExpr and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression - b.variable
-  elif a.kind == nkConstExpr and b.kind == nkConstTerm:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression - b.term
-  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression - b.expression
-  elif a.kind == nkConstTerm and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.term - b.expression
-  elif a.kind == nkConstTerm and b.kind == nkConstTerm:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.term - b.term
-  elif a.kind == nkConstTerm and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.term - b.variable
-  elif a.kind == nkConstTerm and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind in numberNode:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.term - b.toNumber()
-  elif a.kind == nkConstVar and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.variable - b.expression
-  elif a.kind == nkConstVar and b.kind == nkConstTerm:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.variable - b.term
-  elif a.kind == nkConstVar and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.variable - b.variable
-  elif a.kind == nkConstVar and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind in numberNode:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.variable - b.toNumber()
   elif a.kind in numberNode and b.kind in numberNode:
     result = newNodeI(nkFloat, a.lineInfo)
     result.floatVal = a.toNumber() - b.toNumber()
-  elif a.kind in numberNode and b.kind == nkConstVar:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.toNumber() - b.variable
-  elif a.kind in numberNode and b.kind == nkConstTerm:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.toNumber() - b.term
-  elif a.kind in numberNode and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.toNumber() - b.expression
   else: internalError(lay, errUnknownOperation, a.kind, "'-'", b.kind)
 
@@ -618,67 +620,67 @@ proc termOpMul(lay: Layout, a, b, op: Node): Node =
   if a.kind in numberNode and b.kind in numberNode:
     result = newNodeI(nkFloat, a.lineInfo)
     result.floatVal = a.toNumber() * b.toNumber()
-  elif a.kind in numberNode and b.kind == nkConstVar:
-    result = newNodeI(nkConstTerm, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexVar:
+    result = newNodeI(nkFlexTerm, a.lineInfo)
     result.term = a.toNumber() * b.variable
-  elif a.kind in numberNode and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.toNumber() * b.expression
-  elif a.kind in numberNode and b.kind == nkConstTerm:
-    result = newNodeI(nkConstTerm, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexTerm:
+    result = newNodeI(nkFlexTerm, a.lineInfo)
     result.term = a.toNumber() * b.term
-  elif a.kind == nkConstVar and b.kind in numberNode:
-    result = newNodeI(nkConstTerm, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind in numberNode:
+    result = newNodeI(nkFlexTerm, a.lineInfo)
     result.term = a.variable * b.toNumber()
-  elif a.kind == nkConstExpr and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind in numberNode:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression * b.toNumber()
-  elif a.kind == nkConstTerm and b.kind in numberNode:
-    result = newNodeI(nkConstTerm, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind in numberNode:
+    result = newNodeI(nkFlexTerm, a.lineInfo)
     result.term = a.term * b.toNumber()
-  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression * b.expression
-  elif a.kind == nkConstExpr and b.kind == nkConstVar:
-    #result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexVar:
+    #result = newNodeI(nkFlexExpr, a.lineInfo)
     #result.expression = a.expression * b.variable
     lay.sourceError(errIllegalOperation, op, a.kind, "'*'", b.kind)
-  elif a.kind == nkConstVar and b.kind == nkConstExpr:
-    #result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind == nkFlexExpr:
+    #result = newNodeI(nkFlexExpr, a.lineInfo)
     #result.expression = a.variable * b.expression
     lay.sourceError(errIllegalOperation, op, a.kind, "'*'", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, "'*'", b.kind)
 
 proc termOpDiv(lay: Layout, a, b, op: Node): Node =
-  if a.kind == nkConstVar and b.kind in numberNode:
-    result = newNodeI(nkConstTerm, a.lineInfo)
+  if a.kind == nkFlexVar and b.kind in numberNode:
+    result = newNodeI(nkFlexTerm, a.lineInfo)
     result.term = a.variable / b.toNumber()
-  elif a.kind == nkConstTerm and b.kind in numberNode:
-    result = newNodeI(nkConstTerm, a.lineInfo)
+  elif a.kind == nkFlexTerm and b.kind in numberNode:
+    result = newNodeI(nkFlexTerm, a.lineInfo)
     result.term = a.term / b.toNumber()
-  elif a.kind == nkConstExpr and b.kind in numberNode:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind in numberNode:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression / b.toNumber()
-  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
-    result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexExpr:
+    result = newNodeI(nkFlexExpr, a.lineInfo)
     result.expression = a.expression / b.expression
   elif a.kind in numberNode and b.kind in numberNode:
     result = newNodeI(nkFloat, a.lineInfo)
     result.floatVal = a.toNumber() / b.toNumber()
-  elif a.kind in numberNode and b.kind == nkConstVar:
-    #result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexVar:
+    #result = newNodeI(nkFlexExpr, a.lineInfo)
     #result.expression = a.toNumber() / b.variable
     lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
-  elif a.kind in numberNode and b.kind == nkConstExpr:
-    #result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind in numberNode and b.kind == nkFlexExpr:
+    #result = newNodeI(nkFlexExpr, a.lineInfo)
     #result.expression = a.toNumber() / b.expression
     lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
-  elif a.kind == nkConstExpr and b.kind == nkConstVar:
-    #result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexExpr and b.kind == nkFlexVar:
+    #result = newNodeI(nkFlexExpr, a.lineInfo)
     #result.expression = a.expression / b.variable
     lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
-  elif a.kind == nkConstVar and b.kind == nkConstExpr:
-    #result = newNodeI(nkConstExpr, a.lineInfo)
+  elif a.kind == nkFlexVar and b.kind == nkFlexExpr:
+    #result = newNodeI(nkFlexExpr, a.lineInfo)
     #result.expression = a.variable / b.expression
     lay.sourceError(errIllegalOperation, op, a.kind, "'/'", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, "'/'", b.kind)
@@ -696,14 +698,14 @@ proc termPrefixMinus(lay: Layout, operand, op: Node): Node =
   of numberNode:
     result = newNodeI(nkFloat, operand.lineInfo)
     result.floatVal = -operand.toNumber()
-  of nkConstVar:
-    result = newNodeI(nkConstTerm, operand.lineInfo)
+  of nkFlexVar:
+    result = newNodeI(nkFlexTerm, operand.lineInfo)
     result.term = -operand.variable
-  of nkConstTerm:
-    result = newNodeI(nkConstTerm, operand.lineInfo)
+  of nkFlexTerm:
+    result = newNodeI(nkFlexTerm, operand.lineInfo)
     result.term = -operand.term
-  of nkConstExpr:
-    result = newNodeI(nkConstExpr, operand.lineInfo)
+  of nkFlexExpr:
+    result = newNodeI(nkFlexExpr, operand.lineInfo)
     result.expression = -operand.expression
   else: internalError(lay, errUnknownPrefix, "'-'", operand.kind)
 
@@ -712,13 +714,13 @@ proc unaryTermOp(lay: Layout, operand, op: Node, id: SpecialWords): Node =
   of wMinus: result = lay.termPrefixMinus(operand, op)
   else: internalError(lay, errUnknownPrefixOpr, id)
 
-proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
+proc secFlexExpr(lay: Layout, n: Node, choiceMode = false): Node =
   # here we try to validate an expression
   case n.kind
   of nkIdent:
     let id = toKeyWord(n)
-    if id in constProp:
-      result = newNodeI(nkConstVar, n.lineInfo)
+    if id in flexProp:
+      result = newNodeI(nkFlexVar, n.lineInfo)
       result.variable = lay.selectViewProp(lay.lastView, id)
     else:
       lay.sourceError(errUndefinedVar, n, n.ident)
@@ -731,10 +733,10 @@ proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
   of nkInfix:
     ensure(n.len == 3)
     let id = toKeyWord(n[0])
-    if id notin constBinaryTermOp:
+    if id notin flexBinaryTermOp:
       lay.sourceError(errIllegalBinaryOpr, n[0], n[0].ident)
-    let lhs = lay.secConstExpr(n[1], choiceMode)
-    let rhs = lay.secConstExpr(n[2], choiceMode)
+    let lhs = lay.secFlexExpr(n[1], choiceMode)
+    let rhs = lay.secFlexExpr(n[2], choiceMode)
     if choiceMode:
       if lhs.kind == nkEmpty or lhs.kind == nkEmpty:
         return lay.emptyNode
@@ -745,135 +747,135 @@ proc secConstExpr(lay: Layout, n: Node, choiceMode = false): Node =
     # choose among choices, we pick first valid one
     # expr1 | expr2 | expr3
     for cc in n.sons:
-      result = lay.secConstExpr(cc, true)
+      result = lay.secFlexExpr(cc, true)
       if result.kind != nkEmpty: return result
     lay.sourceError(errNoValidBranch, n)
   of nkPrefix:
     ensure(n.len == 2)
     let id = toKeyWord(n[0])
-    if id notin constUnaryTermOp:
+    if id notin flexUnaryTermOp:
       lay.sourceError(errIllegalPrefixOpr, n[0], n[0].ident)
-    let operand = lay.secConstExpr(n[1], choiceMode)
+    let operand = lay.secFlexExpr(n[1], choiceMode)
     if choiceMode and operand.kind == nkEmpty:
       return lay.emptyNode
     result = lay.unaryTermOp(operand, n[0], id)
-  of nkConstVar, nkConstExpr, nkConstTerm:
+  of nkFlexVar, nkFlexExpr, nkFlexTerm:
     # already processed, just return it
     result = n
   else:
     internalError(lay, errUnknownNode, n.kind)
 
-proc constOpEQ(lay: Layout, a, b, op: Node) =
-  if a.kind in numberNode and b.kind == nkConstVar:
+proc flexOpEQ(lay: Layout, a, b, op: Node) =
+  if a.kind in numberNode and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.toNumber() == b.variable)
-  elif a.kind in numberNode and b.kind == nkConstExpr:
+  elif a.kind in numberNode and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.toNumber() == b.expression)
-  elif a.kind in numberNode and b.kind == nkConstTerm:
+  elif a.kind in numberNode and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.toNumber() == b.term)
-  elif a.kind == nkConstVar and b.kind in numberNode:
+  elif a.kind == nkFlexVar and b.kind in numberNode:
     lay.solver.addConstraint(a.variable == b.toNumber())
-  elif a.kind == nkConstVar and b.kind == nkConstVar:
+  elif a.kind == nkFlexVar and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.variable == b.variable)
-  elif a.kind == nkConstVar and b.kind == nkConstTerm:
+  elif a.kind == nkFlexVar and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.variable == b.term)
-  elif a.kind == nkConstVar and b.kind == nkConstExpr:
+  elif a.kind == nkFlexVar and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.variable == b.expression)
-  elif a.kind == nkConstTerm and b.kind == nkConstExpr:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.term == b.expression)
-  elif a.kind == nkConstTerm and b.kind == nkConstTerm:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.term == b.term)
-  elif a.kind == nkConstTerm and b.kind == nkConstVar:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.term == b.variable)
-  elif a.kind == nkConstTerm and b.kind in numberNode:
+  elif a.kind == nkFlexTerm and b.kind in numberNode:
     lay.solver.addConstraint(a.term == b.toNumber())
-  elif a.kind == nkConstExpr and b.kind in numberNode:
+  elif a.kind == nkFlexExpr and b.kind in numberNode:
     lay.solver.addConstraint(a.expression == b.toNumber())
-  elif a.kind == nkConstExpr and b.kind == nkConstVar:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.expression == b.variable)
-  elif a.kind == nkConstExpr and b.kind == nkConstTerm:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.expression == b.term)
-  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.expression == b.expression)
   elif a.kind in numberNode and b.kind in numberNode:
     lay.sourceError(errIllegalOperation, op, a.kind, "=", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, '=', b.kind)
 
-proc constOpLE(lay: Layout, a, b, op: Node) =
-  if a.kind in numberNode and b.kind == nkConstVar:
+proc flexOpLE(lay: Layout, a, b, op: Node) =
+  if a.kind in numberNode and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.toNumber() <= b.variable)
-  elif a.kind in numberNode and b.kind == nkConstExpr:
+  elif a.kind in numberNode and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.toNumber() <= b.expression)
-  elif a.kind in numberNode and b.kind == nkConstTerm:
+  elif a.kind in numberNode and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.toNumber() <= b.term)
-  elif a.kind == nkConstVar and b.kind in numberNode:
+  elif a.kind == nkFlexVar and b.kind in numberNode:
     lay.solver.addConstraint(a.variable <= b.toNumber())
-  elif a.kind == nkConstVar and b.kind == nkConstVar:
+  elif a.kind == nkFlexVar and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.variable <= b.variable)
-  elif a.kind == nkConstVar and b.kind == nkConstTerm:
+  elif a.kind == nkFlexVar and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.variable <= b.term)
-  elif a.kind == nkConstVar and b.kind == nkConstExpr:
+  elif a.kind == nkFlexVar and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.variable <= b.expression)
-  elif a.kind == nkConstTerm and b.kind == nkConstExpr:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.term <= b.expression)
-  elif a.kind == nkConstTerm and b.kind == nkConstTerm:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.term <= b.term)
-  elif a.kind == nkConstTerm and b.kind == nkConstVar:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.term <= b.variable)
-  elif a.kind == nkConstTerm and b.kind in numberNode:
+  elif a.kind == nkFlexTerm and b.kind in numberNode:
     lay.solver.addConstraint(a.term <= b.toNumber())
-  elif a.kind == nkConstExpr and b.kind in numberNode:
+  elif a.kind == nkFlexExpr and b.kind in numberNode:
     lay.solver.addConstraint(a.expression <= b.toNumber())
-  elif a.kind == nkConstExpr and b.kind == nkConstVar:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.expression <= b.variable)
-  elif a.kind == nkConstExpr and b.kind == nkConstTerm:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.expression <= b.term)
-  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.expression <= b.expression)
   elif a.kind in numberNode and b.kind in numberNode:
     lay.sourceError(errIllegalOperation, op, a.kind, "<=", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, "<=", b.kind)
 
-proc constOpGE(lay: Layout, a, b, op: Node) =
-  if a.kind in numberNode and b.kind == nkConstVar:
+proc flexOpGE(lay: Layout, a, b, op: Node) =
+  if a.kind in numberNode and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.toNumber() >= b.variable)
-  elif a.kind in numberNode and b.kind == nkConstExpr:
+  elif a.kind in numberNode and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.toNumber() >= b.expression)
-  elif a.kind in numberNode and b.kind == nkConstTerm:
+  elif a.kind in numberNode and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.toNumber() >= b.term)
-  elif a.kind == nkConstVar and b.kind in numberNode:
+  elif a.kind == nkFlexVar and b.kind in numberNode:
     lay.solver.addConstraint(a.variable >= b.toNumber())
-  elif a.kind == nkConstVar and b.kind == nkConstVar:
+  elif a.kind == nkFlexVar and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.variable >= b.variable)
-  elif a.kind == nkConstVar and b.kind == nkConstTerm:
+  elif a.kind == nkFlexVar and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.variable >= b.term)
-  elif a.kind == nkConstVar and b.kind == nkConstExpr:
+  elif a.kind == nkFlexVar and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.variable >= b.expression)
-  elif a.kind == nkConstTerm and b.kind == nkConstExpr:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.term >= b.expression)
-  elif a.kind == nkConstTerm and b.kind == nkConstTerm:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.term >= b.term)
-  elif a.kind == nkConstTerm and b.kind == nkConstVar:
+  elif a.kind == nkFlexTerm and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.term >= b.variable)
-  elif a.kind == nkConstTerm and b.kind in numberNode:
+  elif a.kind == nkFlexTerm and b.kind in numberNode:
     lay.solver.addConstraint(a.term >= b.toNumber())
-  elif a.kind == nkConstExpr and b.kind in numberNode:
+  elif a.kind == nkFlexExpr and b.kind in numberNode:
     lay.solver.addConstraint(a.expression >= b.toNumber())
-  elif a.kind == nkConstExpr and b.kind == nkConstVar:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexVar:
     lay.solver.addConstraint(a.expression >= b.variable)
-  elif a.kind == nkConstExpr and b.kind == nkConstTerm:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexTerm:
     lay.solver.addConstraint(a.expression >= b.term)
-  elif a.kind == nkConstExpr and b.kind == nkConstExpr:
+  elif a.kind == nkFlexExpr and b.kind == nkFlexExpr:
     lay.solver.addConstraint(a.expression >= b.expression)
   elif a.kind in numberNode and b.kind in numberNode:
     lay.sourceError(errIllegalOperation, op, a.kind, "<=", b.kind)
   else: internalError(lay, errUnknownOperation, a.kind, ">=", b.kind)
 
-proc constOp(lay: Layout, a, b, op: Node, id: SpecialWords) =
+proc flexOp(lay: Layout, a, b, op: Node, id: SpecialWords) =
   try:
     case id
-    of wEquals: lay.constOpEQ(a, b, op)
-    of wGreaterOrEqual: lay.constOpGE(a, b, op)
-    of wLessOrEqual: lay.constOpLE(a, b, op)
+    of wEquals: lay.flexOpEQ(a, b, op)
+    of wGreaterOrEqual: lay.flexOpGE(a, b, op)
+    of wLessOrEqual: lay.flexOpLE(a, b, op)
     else: internalError(lay, errUnknownEqualityOpr, id)
   except UnsatisfiableConstraintException:
     lay.sourceError(errUnsatisfiableConstraint, op)
@@ -885,9 +887,9 @@ proc secChoiceList(lay: Layout, lhs, rhs, op: Node, opId: SpecialWords) =
     lay.sourceError(errUnbalancedArm, op)
   if rhs.len != lhs.len: lay.sourceError(errUnbalancedArm, op)
   for i in 0.. <lhs.len:
-    lhs[i] = lay.secConstExpr(lhs[i])
-    rhs[i] = lay.secConstExpr(rhs[i])
-    lay.constOp(lhs[i], rhs[i], op, opId)
+    lhs[i] = lay.secFlexExpr(lhs[i])
+    rhs[i] = lay.secFlexExpr(rhs[i])
+    lay.flexOp(lhs[i], rhs[i], op, opId)
 
 proc secFlexList(lay: Layout, n: Node) =
   ensure(n.kind == nkFlexList)
@@ -899,13 +901,13 @@ proc secFlexList(lay: Layout, n: Node) =
       let op  = cc.sons[i+1]
       let rhs = cc.sons[i+2]
       let opId = toKeyWord(op)
-      ensure(opId in constOpr)
+      ensure(opId in flexOpr)
       if lhs.kind == nkChoiceList or rhs.kind == nkChoiceList:
         lay.secChoiceList(lhs, rhs, op, opId)
       else:
-        cc.sons[i] = lay.secConstExpr(lhs)
-        cc.sons[i+2] = lay.secConstExpr(rhs)
-        lay.constOp(cc.sons[i], cc.sons[i+2], op, opId)
+        cc.sons[i] = lay.secFlexExpr(lhs)
+        cc.sons[i+2] = lay.secFlexExpr(rhs)
+        lay.flexOp(cc.sons[i], cc.sons[i+2], op, opId)
 
 proc secEventList(lay: Layout, n: Node) =
   discard
@@ -946,6 +948,10 @@ proc secTopLevel*(lay: Layout, n: Node) =
   ensure(n.kind == nkStmtList)
   for son in n.sons:
     lay.secStmt(son)
+
+  for s in values(lay.classTbl):
+    if sfUsed notin s.sym.flags:
+      lay.sourceWarning(warnClassNotUsed, s, s.sym.name)
 
 proc luaBinding(lay: Layout) =
   var L = lay.context.getLua()

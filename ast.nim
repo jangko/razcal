@@ -55,9 +55,9 @@ type
     nkChoice       # a list of exprs, excluding '|' operator
     nkChoiceList   # a list of choices, separated by comma ','
     nkConstraint   # kiwi.Constraint
-    nkConstExpr    # kiwi.Expression
-    nkConstTerm    # kiwi.Term
-    nkConstVar     # kiwi.Variable
+    nkFlexExpr    # kiwi.Expression
+    nkFlexTerm    # kiwi.Term
+    nkFlexVar     # kiwi.Variable
 
     # class instantiation used by view
     nkViewClass, nkViewParam
@@ -90,11 +90,11 @@ type
       sym*: Symbol
     of nkConstraint:
       constraint*: kiwi.Constraint
-    of nkConstExpr:
+    of nkFlexExpr:
       expression*: kiwi.Expression
-    of nkConstTerm:
+    of nkFlexTerm:
       term*: kiwi.Term
-    of nkConstVar:
+    of nkFlexVar:
       variable*: kiwi.Variable
     else:
       sons*: seq[Node]
@@ -102,7 +102,7 @@ type
 
 const
   NodeWithVal* = {nkInt, nkUInt, nkFloat, nkString, nkCharLit,
-    nkIdent, nkSymbol, nkConstraint, nkConstExpr, nkConstTerm, nkConstVar}
+    nkIdent, nkSymbol, nkConstraint, nkFlexExpr, nkFlexTerm, nkFlexVar}
 
   NodeWithSons* = {low(NodeKind)..high(NodeKind)} - NodewithVal
 
@@ -167,9 +167,9 @@ proc val*(n: Node): string =
       result.add(toHex(ord(c), 2))
   of nkIdent: result = $n.ident
   of nkSymbol: result = $n.sym.name
-  of nkConstVar: result = n.variable.name & "(" & $n.variable.value & ")"
-  of nkConstExpr: result = $n.expression
-  of nkConstTerm: result = $n.term
+  of nkFlexVar: result = n.variable.name & "(" & $n.variable.value & ")"
+  of nkFlexExpr: result = $n.expression
+  of nkFlexTerm: result = $n.term
   of nkConstraint: result = $n.constraint
   else: result = ""
 
@@ -197,14 +197,14 @@ proc copyTree*(n: Node): Node =
   of nkConstraint:
     result = newNode(nkConstraint)
     result.constraint = n.constraint
-  of nkConstExpr:
-    result = newNode(nkConstExpr)
+  of nkFlexExpr:
+    result = newNode(nkFlexExpr)
     result.expression = n.expression
-  of nkConstTerm:
-    result = newNode(nkConstTerm)
+  of nkFlexTerm:
+    result = newNode(nkFlexTerm)
     result.term = n. term
-  of nkConstVar:
-    result = newNode(nkConstVar)
+  of nkFlexVar:
+    result = newNode(nkFlexVar)
     result.variable = n.variable
   else:
     result = newNode(n.kind)

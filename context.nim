@@ -100,6 +100,7 @@ type
     errLua
 
     warnParamNotUsed
+    warnClassNotUsed
 
 const
   InvalidFileIDX* = int32(-1)
@@ -168,6 +169,7 @@ const
     errLua: "lua VM error: $1",
 
     warnParamNotUsed: "param `$1` not used",
+    warnClassNotUsed: "class `$1` not used",
   ]
 
 proc openContext*(): Context =
