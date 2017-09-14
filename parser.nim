@@ -298,14 +298,15 @@ proc parseFlexList(p: var Parser): Node =
   result = p.emptyNode
   withInd(p):
     while sameInd(p):
-      while p.tok.kind == tkSemiColon or p.tok.indent >= p.currInd:
-        if p.tok.kind == tkSemiColon: p.getTok()
+      while true:
         p.optPar()
         let n = parseFlex(p)
         # if no more flex, we finish here
         if n.kind == nkEmpty: return result
         if result.kind == nkEmpty: result = newNodeP(p, nkFlexList)
         addSon(result, n)
+        if p.tok.kind == tkSemiColon: p.getTok()
+        else: break
 
 proc parseEvent(p: var Parser): Node =
   if p.tok.kind != tkIdent:
