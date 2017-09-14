@@ -13,7 +13,7 @@ type
   Context* = ref object
     identCache: IdentCache     # only one IdentCache per app
     fileInfos: seq[FileInfo]   # FileInfo list
-    filenameToIndex: Table[string, int32] # map canonical filename into FileInfo index
+    fileNameToIndex: Table[string, int32] # map canonical fileName into FileInfo index
     binaryPath: string         # app path
     lua: lua_State
 
@@ -176,7 +176,7 @@ proc openContext*(): Context =
   new(result)
   result.identCache = newIdentCache()
   result.fileInfos = @[]
-  result.filenameToIndex = initTable[string, int32]()
+  result.fileNameToIndex = initTable[string, int32]()
   result.binaryPath = getAppDir()
   result.lua = newNimLua()
 
@@ -255,33 +255,33 @@ proc printError*(ctx: Context, err: InternalError) =
 proc newFileInfo(fullPath, projPath: string): FileInfo =
   result.fullPath = fullPath
   result.projPath = projPath
-  let fileName = projPath.extractFilename
+  let fileName = projPath.extractfileName
   result.fileName = fileName
   result.shortName = fileName.changeFileExt("")
 
-proc fileInfoIdx*(ctx: Context, filename: string; isKnownFile: var bool): int32 =
+proc fileInfoIdx*(ctx: Context, fileName: string; isKnownFile: var bool): int32 =
   # map file name into FileInfo list's index
   var
     canon: string
     pseudoPath = false
 
   try:
-    canon = canonicalizePath(filename)
+    canon = canonicalizePath(fileName)
     shallow(canon)
   except:
-    canon = filename
-    # The compiler uses "filenames" such as `command line` or `stdin`
+    canon = fileName
+    # The compiler uses "fileNames" such as `command line` or `stdin`
     # This flag indicates that we are working with such a path here
     pseudoPath = true
 
-  if ctx.filenameToIndex.hasKey(canon):
-    result = ctx.filenameToIndex[canon]
+  if ctx.fileNameToIndex.hasKey(canon):
+    result = ctx.fileNameToIndex[canon]
   else:
     isKnownFile = false
     result = ctx.fileInfos.len.int32
-    ctx.fileInfos.add(newFileInfo(canon, if pseudoPath: filename
+    ctx.fileInfos.add(newFileInfo(canon, if pseudoPath: fileName
                                          else: shortenDir(ctx.binaryPath, canon)))
-    ctx.filenameToIndex[canon] = result
+    ctx.fileNameToIndex[canon] = result
 
 proc toFileName*(ctx: Context, info: LineInfo): string =
   assert(info.fileIndex >= 0 and info.fileIndex < ctx.fileInfos.len)

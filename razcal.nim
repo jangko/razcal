@@ -1,4 +1,6 @@
-import os, glfw
+import os, glfw, nvg
+
+proc load_glex() {.importc.}
 
 proc main =
   glfw.init()
