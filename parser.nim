@@ -1,4 +1,4 @@
-import lexer, lexbase, idents, streams, os, ast, semcheck, context, keywords
+import lexer, lexbase, idents, ast, semcheck, keywords, streams, razcontext
 
 type
   Parser* = object
@@ -77,7 +77,7 @@ proc newCharLitNodeP(p: Parser): Node =
   result = newCharLitNode(p.tok.literal)
   result.lineInfo = p.getLineInfo
 
-proc openParser*(inputStream: Stream, context: Context, fileIndex: int32): Parser =
+proc openParser*(inputStream: Stream, context: RazContext, fileIndex: int32): Parser =
   result.tok = initToken()
   result.lex = openLexer(inputStream, context, fileIndex)
   result.getTok() # read the first token
@@ -438,7 +438,7 @@ proc parseTopLevel(p: var Parser): Node =
   else:
     p.error(errInvalidToken, p.tok.kind)
 
-proc parseAll(p: var Parser): Node =
+proc parseAll*(p: var Parser): Node =
   result = newNodeP(p, nkStmtList)
   while p.tok.kind != tkEof:
     p.hasProgress = false
@@ -451,33 +451,3 @@ proc parseAll(p: var Parser): Node =
       p.getTok()
     if p.tok.indent != 0:
       p.error(errInvalidIndentation)
-
-proc main() =
-  let fileName = paramStr(1)
-  var input = newFileStream(fileName)
-  var ctx = openContext()
-  var knownFile = false
-  let fileIndex = ctx.fileInfoIdx(fileName, knownFile)
-
-  try:
-  #block:
-    var p = openParser(input, ctx, fileIndex)
-    var root = p.parseAll()
-    p.close()
-
-    var lay = newLayout(0, ctx)
-    lay.semCheck(root)
-  except SourceError as srcErr:
-    ctx.printError(srcErr)
-  except InternalError as ex:
-    ctx.printError(ex)
-  except OtherError as ex:
-    echo ex.msg
-  except Exception as ex:
-    echo "unknown error: ", ex.msg
-    writeStackTrace()
-
-  ctx.close()
-
-main()
-

@@ -1,4 +1,4 @@
-import ast, layout, idents, kiwi, tables, context, hashes, strutils
+import ast, layout, idents, kiwi, tables, razcontext, hashes, strutils
 import nimLUA, keywords
 
 type
@@ -7,7 +7,7 @@ type
     viewTbl: Table[View, Node]   # view to SymbolNode.skView
     classTbl: Table[Ident, Node] # string to SymbolNode.skClass
     solver: kiwi.Solver          # constraint solver
-    context: Context             # ref to app global context
+    context: RazContext             # ref to app global context
     lastView: View               # last processed parent view/current View
     emptyNode: Node
 
@@ -42,7 +42,7 @@ proc createView(lay: Layout, n: Node): Node =
   lay.solver.setBasicConstraint(view)
 
 # one application can have multiple layout a.k.a 'page'
-proc newLayout*(id: int, context: Context): Layout =
+proc newLayout*(id: int, context: RazContext): Layout =
   new(result)
   result.id = id
   result.viewTbl = initTable[View, Node]()
@@ -80,7 +80,7 @@ proc otherError(lay: Layout, kind: MsgKind, args: varargs[string, `$`]) =
   # not internal error and not source error
   lay.context.otherError(kind, args)
 
-proc getCurrentLine*(lay: Layout, info: context.LineInfo): string =
+proc getCurrentLine*(lay: Layout, info: razcontext.LineInfo): string =
   # we don't have lexer getCurrentLine anymore
   # so we simulate one here
   let fileName = lay.context.toFullPath(info)
@@ -997,7 +997,7 @@ proc luaBinding(lay: Layout) =
   proc layoutProxy(L: PState): cint {.cdecl.} =
     getRegisteredType(Layout, mtName, pxName)
     var ret = cast[ptr pxName](L.newUserData(sizeof(pxName)))
-
+    zeroMem(ret, sizeof(pxName))
     # retrieve Layout
     L.pushLightUserData(cast[pointer](NLMaxID)) # push key
     L.getTable(LUA_REGISTRYINDEX)           # retrieve value
@@ -1038,7 +1038,7 @@ proc semCheck*(lay: Layout, n: Node) =
   lay.solver.updateVariables()
   lay.context.executeLua("apple.lua")
 
-  var L = lay.context.getLua()
+  #[var L = lay.context.getLua()
   L.getGlobal("View")     # get View table
   discard L.pushString("onClick") # push the key "onClick"
   L.rawGet(-2)            # get the function
@@ -1052,3 +1052,4 @@ proc semCheck*(lay: Layout, n: Node) =
       L.pop(1)
       lay.context.otherError(errLua, errorMsg)
   L.pop(1) # pop View Table
+  ]#

@@ -1,8 +1,8 @@
-import lexbase, strutils, streams, idents, keywords, context
+import lexbase, strutils, streams, idents, keywords, razcontext
 
 type
   Lexer* = object of BaseLexer
-    context*: Context
+    context*: RazContext
     nextState: LexerState
     tokenStartPos: int
     fileIndex*: int32
@@ -72,7 +72,7 @@ proc stateCharLit(lex: var Lexer, tok: var Token): bool
 proc stateOperator(lex: var Lexer, tok: var Token): bool
 {.pop.}
 
-proc openLexer*(stream: Stream, context: Context, fileIndex: int32): Lexer =
+proc openLexer*(stream: Stream, context: RazContext, fileIndex: int32): Lexer =
   result.fileIndex = fileIndex
   result.open(stream)
   result.nextState = stateOuterScope

@@ -10,7 +10,7 @@ type
     fileName*: string          # name.ext
 
   # global app context, one per app
-  Context* = ref object
+  RazContext* = ref object
     identCache: IdentCache     # only one IdentCache per app
     fileInfos: seq[FileInfo]   # FileInfo list
     fileNameToIndex: Table[string, int32] # map canonical fileName into FileInfo index
@@ -172,7 +172,7 @@ const
     warnClassNotUsed: "class `$1` not used",
   ]
 
-proc openContext*(): Context =
+proc openRazContext*(): RazContext =
   new(result)
   result.identCache = newIdentCache()
   result.fileInfos = @[]
@@ -180,26 +180,26 @@ proc openContext*(): Context =
   result.binaryPath = getAppDir()
   result.lua = newNimLua()
 
-proc close*(ctx: Context) =
+proc close*(ctx: RazContext) =
   ctx.lua.close()
 
-proc getLua*(ctx: Context): lua_State =
+proc getLua*(ctx: RazContext): lua_State =
   ctx.lua
 
-proc getIdent*(ctx: Context, ident: string): Ident {.inline.} =
+proc getIdent*(ctx: RazContext, ident: string): Ident {.inline.} =
   # a helper proc to get ident
   result = ctx.identCache.getIdent(ident)
 
-proc msgKindToString*(ctx: Context, kind: MsgKind, args: varargs[string]): string =
+proc msgKindToString*(ctx: RazContext, kind: MsgKind, args: varargs[string]): string =
   # later versions may provide translated error messages
   result = MsgKindToStr[kind] % args
 
-proc otherError*(ctx: Context, kind: MsgKind, args: varargs[string, `$`]) =
+proc otherError*(ctx: RazContext, kind: MsgKind, args: varargs[string, `$`]) =
   var err = new(OtherError)
   err.msg = ctx.msgKindToString(kind, args)
   raise err
 
-proc executeLua*(ctx: Context, fileName: string) =
+proc executeLua*(ctx: RazContext, fileName: string) =
   if ctx.lua.doFile(fileName) != 0.cint:
     let errorMsg = ctx.lua.toString(-1)
     ctx.lua.pop(1)
@@ -235,20 +235,20 @@ proc marker(err: SourceError): string =
       result[i] = '.'
       dec i
 
-proc printMessage*(ctx: Context, err: SourceError, errClass: string) =
+proc printMessage*(ctx: RazContext, err: SourceError, errClass: string) =
   assert(err.fileIndex >= 0 and err.fileIndex < ctx.fileInfos.len)
   let info = ctx.fileInfos[err.fileIndex]
   let msg = "$1($2,$3) $4: $5" % [info.fileName, $err.line, $(err.column + 1), errClass, err.msg]
   echo err.marker()
   echo msg
 
-proc printWarning*(ctx: Context, err: SourceError) =
+proc printWarning*(ctx: RazContext, err: SourceError) =
   ctx.printMessage(err, "Warning")
 
-proc printError*(ctx: Context, err: SourceError) =
+proc printError*(ctx: RazContext, err: SourceError) =
   ctx.printMessage(err, "Error")
 
-proc printError*(ctx: Context, err: InternalError) =
+proc printError*(ctx: RazContext, err: InternalError) =
   let msg = "$1:$2 -> Internal Error: $3" % [err.fileName, $err.line, err.msg]
   echo msg
 
@@ -259,7 +259,7 @@ proc newFileInfo(fullPath, projPath: string): FileInfo =
   result.fileName = fileName
   result.shortName = fileName.changeFileExt("")
 
-proc fileInfoIdx*(ctx: Context, fileName: string; isKnownFile: var bool): int32 =
+proc fileInfoIdx*(ctx: RazContext, fileName: string; isKnownFile: var bool): int32 =
   # map file name into FileInfo list's index
   var
     canon: string
@@ -283,13 +283,13 @@ proc fileInfoIdx*(ctx: Context, fileName: string; isKnownFile: var bool): int32 
                                          else: shortenDir(ctx.binaryPath, canon)))
     ctx.fileNameToIndex[canon] = result
 
-proc toFileName*(ctx: Context, info: LineInfo): string =
+proc toFileName*(ctx: RazContext, info: LineInfo): string =
   assert(info.fileIndex >= 0 and info.fileIndex < ctx.fileInfos.len)
   result = ctx.fileInfos[info.fileIndex].fileName
 
-proc toFullPath*(ctx: Context, info: LineInfo): string =
+proc toFullPath*(ctx: RazContext, info: LineInfo): string =
   assert(info.fileIndex >= 0 and info.fileIndex < ctx.fileInfos.len)
   result = ctx.fileInfos[info.fileIndex].fullPath
 
-proc toString*(ctx: Context, info: LineInfo): string =
+proc toString*(ctx: RazContext, info: LineInfo): string =
   result = "$1($2:$3)" % [ctx.toFileName(info), $info.line, $(info.col+1)]

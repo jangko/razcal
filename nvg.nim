@@ -524,6 +524,11 @@ proc nvgFill*(ctx: NVGContext) {.nvg.}
 
 proc nvgStroke*(ctx: NVGContext) {.nvg.}
 
+proc nvgStroke*(ctx: NVGContext, r, g, b, a, strokeWidth: cfloat) =
+  ctx.nvgStrokeWidth(strokeWidth)
+  ctx.nvgStrokeColor(nvgRGBAf(r, g ,b ,a))
+  ctx.nvgStroke()
+
 # Text
 #
 # NanoVG allows you to load .ttf files and use the font to render text.
