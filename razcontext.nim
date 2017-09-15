@@ -1,6 +1,15 @@
 import strutils, idents, os, tables, utils
 import nimLUA
 
+var IDSeed {.compileTime.} = 0
+
+macro genLuaID*(): untyped =
+  result = newIntLitNode(NLMaxID-IDSeed)
+  inc IDSeed
+
+macro getPrevID*(): untyped =
+  result = newIntLitNode(NLMaxID-IDSeed+1)
+
 type
   # information about a file(raz, lua, etc)
   FileInfo* = object

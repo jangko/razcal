@@ -3,11 +3,12 @@ import streams
 
 proc load_glex() {.importc, cdecl.}
 
-proc bindNVG(L: PState) =
+proc bindNVG(L: PState, nvg: NVGcontext) =
 
+  #nimLuaOptions(nloDebug, true)
   L.bindObject(NVGContext -> "nvg"):
     nvgCreate -> "create"
-    ~nvgDelete
+    #~nvgDelete
     nvgBeginFrame -> "beginFrame"
     nvgCancelFrame -> "cancelFrame"
     nvgEndFrame -> "endFrame"
@@ -112,6 +113,27 @@ proc bindNVG(L: PState) =
     nvgTransformInverse -> "transformInverse"
     nvgTransformPoint -> "transformPoint"
 
+  # store Layout reference
+  L.pushLightUserData(cast[pointer](genLuaID())) # push key
+  L.pushLightUserData(cast[pointer](nvg)) # push value
+  L.setTable(LUA_REGISTRYINDEX)           # registry[lay.addr] = lay
+
+  # register the only entry point of layout hierarchy to lua
+  proc nvgProxy(L: PState): cint {.cdecl.} =
+    getRegisteredType(NVGcontext, mtName, pxName)
+    var ret = cast[ptr pxName](L.newUserData(sizeof(pxName)))
+    # retrieve Layout
+    L.pushLightUserData(cast[pointer](getPrevID())) # push key
+    L.getTable(LUA_REGISTRYINDEX)           # retrieve value
+    ret.ud = cast[NVGcontext](L.toUserData(-1)) # convert to layout
+    L.pop(1) # remove userdata
+    L.nimGetMetaTable(mtName)
+    discard L.setMetatable(-2)
+    return 1
+
+  L.pushCfunction(nvgProxy)
+  L.setGlobal("getNVG")
+
 proc loadMainScript(ctx: RazContext) =
   let fileName = if paramCount() == 0: "main.raz" else: paramStr(1)
   var input = newFileStream(fileName)
@@ -147,7 +169,6 @@ proc callF(ctx: RazContext, funcName: string) =
 proc main =
   var ctx = openRazContext()
   var L = ctx.getLua()
-  L.bindNVG()
   ctx.loadMainScript()
 
   glfw.init()
@@ -160,6 +181,8 @@ proc main =
   if nvg.pointer == nil:
     echo "Could not init nanovg."
     return
+
+  L.bindNVG(nvg)
 
   while not w.shouldClose():
     let s = w.framebufSize()
@@ -184,7 +207,8 @@ proc main =
 
     nvg.nvgEndFrame()
 
-    w.update()
+    w.swapBufs()
+    waitEvents()
 
   nvg.nvgDelete()
   w.destroy()

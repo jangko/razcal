@@ -989,7 +989,7 @@ proc luaBinding(lay: Layout) =
   #nimLuaOptions(nloDebug, false)
 
   # store Layout reference
-  L.pushLightUserData(cast[pointer](NLMaxID)) # push key
+  L.pushLightUserData(cast[pointer](genLuaID())) # push key
   L.pushLightUserData(cast[pointer](lay)) # push value
   L.setTable(LUA_REGISTRYINDEX)           # registry[lay.addr] = lay
 
@@ -999,7 +999,7 @@ proc luaBinding(lay: Layout) =
     var ret = cast[ptr pxName](L.newUserData(sizeof(pxName)))
     zeroMem(ret, sizeof(pxName))
     # retrieve Layout
-    L.pushLightUserData(cast[pointer](NLMaxID)) # push key
+    L.pushLightUserData(cast[pointer](getPrevID())) # push key
     L.getTable(LUA_REGISTRYINDEX)           # retrieve value
     ret.ud = cast[Layout](L.toUserData(-1)) # convert to layout
     L.pop(1) # remove userdata
