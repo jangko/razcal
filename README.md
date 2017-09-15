@@ -76,4 +76,5 @@ documentation none, tutorial none.
   * automated build system + test
 
 The first screenshot ever:
-![Screenshot](https://github.com/jangko/razcal/tree/master/examples/screenshot-1.png)
+
+![Screenshot](examples/screenshot-1.png)
