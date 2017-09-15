@@ -4,7 +4,7 @@ import streams
 proc load_glex() {.importc, cdecl.}
 
 proc bindNVG(L: PState) =
-  
+
   L.bindObject(NVGContext -> "nvg"):
     nvgCreate -> "create"
     ~nvgDelete
@@ -113,7 +113,7 @@ proc bindNVG(L: PState) =
     nvgTransformPoint -> "transformPoint"
 
 proc loadMainScript(ctx: RazContext) =
-  let fileName = paramStr(1)
+  let fileName = if paramCount() == 0: "main.raz" else: paramStr(1)
   var input = newFileStream(fileName)
   var knownFile = false
   let fileIndex = ctx.fileInfoIdx(fileName, knownFile)
@@ -149,7 +149,7 @@ proc main =
   var L = ctx.getLua()
   L.bindNVG()
   ctx.loadMainScript()
-  
+
   glfw.init()
   var w = newGlWin(nMultiSamples = 4)
   w.makeContextCurrent()
@@ -169,7 +169,7 @@ proc main =
     glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
 
     ctx.callF("updateScene")
-    
+
     nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
 
     let

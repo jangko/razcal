@@ -1036,7 +1036,7 @@ proc semCheck*(lay: Layout, n: Node) =
   lay.secTopLevel(n)
 
   lay.solver.updateVariables()
-  lay.context.executeLua("apple.lua")
+  lay.context.executeLua("main.lua")
 
   #[var L = lay.context.getLua()
   L.getGlobal("View")     # get View table
