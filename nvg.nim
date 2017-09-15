@@ -29,9 +29,8 @@ else:
   {.error: "define nvgGL2, nvgGL3, nvgGLES2, or nvgGLES3 (pass -d:... to compile)".}
 
 {.pragma: nvg, header:"nanovg.h", cdecl, importc.}
-# {.pragma: glf, importc:"glnvg__$1", cdecl, header:"nanovg_gl.h".}
 {.pragma: nvgl, importc, header:"nanovg_gl.h", cdecl.}
-# {.pragma: nvgType, header:"nanovg.h", importc.}
+{.pragma: nvgType, header:"nanovg.h", importc.}
 
 import os
 const ThisPath* = currentSourcePath.splitPath.head
@@ -46,62 +45,48 @@ const
   NVG_PI* = math.PI#3.141592653589793
 
   # Flag indicating if geometry based anti-aliasing is used (may not be needed when using MSAA).
-  NVG_ANTIALIAS       = (1 shl 0).cint
+  NVG_ANTIALIAS*       = (1 shl 0).cint
   # Flag indicating if strokes should be drawn using stencil buffer. The rendering will be a little
   # slower, but path overlaps (i.e. self-intersecting or sharp turns) will be drawn just once.
-  NVG_STENCIL_STROKES = (1 shl 1).cint
+  NVG_STENCIL_STROKES* = (1 shl 1).cint
   # Flag indicating that additional debug checks are done.
-  NVG_DEBUG           = (1 shl 2).cint
+  NVG_DEBUG*           = (1 shl 2).cint
 
 type
   NVGContext* = distinct pointer
 
-  NVGcreateFlags* = enum
-    nvgAntiAlias, nvgStencilStrokes, nvgDebug
-
 when defined(nvgGL2):
-  proc nvgCreate(flags: cint): NVGcontext {.nvgl, importc: "nvgCreateGL2".}
+  proc nvgCreate*(flags: cint): NVGcontext {.nvgl, importc: "nvgCreateGL2".}
   proc nvgDelete*(ctx: NVGcontext) {.nvgl, importc: "nvgDeleteGL2".}
-  proc nvglCreateImageFromHandle*(ctx: NVGcontext, textureId: GLuint; w, h, flags: cint): cint {.nvgl, importc: "nvglCreateImageFromHandleGL2".}
-  proc nvglImageHandle*(ctx: NVGcontext, image: cint): GLuint {.nvgl, importc: "nvglImageHandleGL2".}
+  proc nvgCreateImageFromHandle*(ctx: NVGcontext, textureId: GLuint; w, h, flags: cint): cint {.nvgl, importc: "nvglCreateImageFromHandleGL2".}
+  proc nvgImageHandle*(ctx: NVGcontext, image: cint): GLuint {.nvgl, importc: "nvglImageHandleGL2".}
 elif defined(nvgGL3):
-  proc nvgCreate(flags: cint): NVGcontext {.nvgl, importc: "nvgCreateGL3".}
+  proc nvgCreate*(flags: cint): NVGcontext {.nvgl, importc: "nvgCreateGL3".}
   proc nvgDelete*(ctx: NVGcontext) {.nvgl, importc: "nvgDeleteGL3".}
-  proc nvglCreateImageFromHandle*(ctx: NVGcontext, textureId: GLuint; w, h, flags: cint): cint {.nvgl, importc: "nvglCreateImageFromHandleGL3".}
-  proc nvglImageHandle*(ctx: NVGcontext, image: cint): GLuint {.nvgl, importc: "nvglImageHandleGL3".}
+  proc nvgCreateImageFromHandle*(ctx: NVGcontext, textureId: GLuint; w, h, flags: cint): cint {.nvgl, importc: "nvglCreateImageFromHandleGL3".}
+  proc nvgImageHandle*(ctx: NVGcontext, image: cint): GLuint {.nvgl, importc: "nvglImageHandleGL3".}
 elif defined(nvgGLES2):
-  proc nvgCreate(flags: cint): NVGcontext {.nvgl, importc: "nvgCreateGLES2".}
+  proc nvgCreate*(flags: cint): NVGcontext {.nvgl, importc: "nvgCreateGLES2".}
   proc nvgDelete*(ctx: NVGcontext) {.nvgl, importc: "nvgDeleteGLES2".}
-  proc nvglCreateImageFromHandle*(ctx: NVGcontext, textureId: GLuint; w, h, flags: cint): cint {.nvgl, importc: "nvglCreateImageFromHandleGLES2".}
-  proc nvglImageHandle*(ctx: NVGcontext, image: cint): GLuint {.nvgl, importc: "nvglImageHandleGLES2".}
+  proc nvgCreateImageFromHandle*(ctx: NVGcontext, textureId: GLuint; w, h, flags: cint): cint {.nvgl, importc: "nvglCreateImageFromHandleGLES2".}
+  proc nvgImageHandle*(ctx: NVGcontext, image: cint): GLuint {.nvgl, importc: "nvglImageHandleGLES2".}
 elif defined(nvgGLES3):
-  proc nvgCreate(flags: cint): NVGcontext {.nvgl, importc: "nvgCreateGLES3".}
+  proc nvgCreate*(flags: cint): NVGcontext {.nvgl, importc: "nvgCreateGLES3".}
   proc nvgDelete*(ctx: NVGcontext) {.nvgl, importc: "nvgDeleteGLES3".}
-  proc nvglCreateImageFromHandle*(ctx: NVGcontext, textureId: GLuint; w, h, flags: cint): cint {.nvgl, importc: "nvglCreateImageFromHandleGLES3".}
-  proc nvglImageHandle*(ctx: NVGcontext, image: cint): GLuint {.nvgl, importc: "nvglImageHandleGLES3".}
-
-const
-  CF_TO_C: array[NVGCreateFlags, cint] = [
-    NVG_ANTIALIAS, NVG_STENCIL_STROKES, NVG_DEBUG]
-
-proc nvgCreate*(flags: set[NVGCreateFlags]): NVGcontext =
-  var f: cint
-  for c in NVGCreateFlags:
-    if c in flags:
-      f = f or CF_TO_C[c]
-  result = nvgCreate(f)
+  proc nvgCreateImageFromHandle*(ctx: NVGcontext, textureId: GLuint; w, h, flags: cint): cint {.nvgl, importc: "nvglCreateImageFromHandleGLES3".}
+  proc nvgImageHandle*(ctx: NVGcontext, image: cint): GLuint {.nvgl, importc: "nvglImageHandleGLES3".}
 
 const
   NVG_IMAGE_NODELETE* = 1 shl 16 # Do not delete GL texture handle.
 
 type
-  NVGcolor* {.byCopy.} = object
+  NVGcolor* {.nvgType, byCopy.} = object
     r*: cfloat
     g*: cfloat
     b*: cfloat
     a*: cfloat
 
-  NVGpaint* {.byCopy.} = object
+  NVGpaint* {.nvgType, byCopy.} = object
     xform*: array[6, cfloat]
     extent*: array[2, cfloat]
     radius*: cfloat
@@ -134,21 +119,6 @@ const
   NVG_ALIGN_MIDDLE* = (1 shl 4).cint   # Align text vertically to middle.
   NVG_ALIGN_BOTTOM* = (1 shl 5).cint   # Align text vertically to bottom.
   NVG_ALIGN_BASELINE* = (1 shl 6).cint # Default, align text vertically to baseline.
-
-type
-  NVGalign* = enum
-    nvgAlignLeft
-    nvgAlignCenter
-    nvgAlignRight
-    nvgAlignTop
-    nvgAlignMiddle
-    nvgAlignBottom
-    nvgAlignBaseline
-
-const VGA_TO_C*: array[NVGalign, cint] = [
-  NVG_ALIGN_LEFT, NVG_ALIGN_CENTER, NVG_ALIGN_RIGHT,
-  NVG_ALIGN_TOP, NVG_ALIGN_MIDDLE, NVG_ALIGN_BOTTOM,
-  NVG_ALIGN_BASELINE]
 
 const
   NVG_ZERO* = (1 shl 0).cint
@@ -714,6 +684,6 @@ type
 proc nvgCreateInternal*(params: ptr NVGparams): NVGcontext {.nvg.}
 proc nvgDeleteInternal*(ctx: NVGContext) {.nvg.}
 proc nvgInternalParams*(ctx: NVGContext): ptr NVGparams {.nvg.}
-# Debug function to dump cached path data.
 
+# Debug function to dump cached path data.
 proc nvgDebugDumpPathCache*(ctx: NVGContext) {.nvg.}
