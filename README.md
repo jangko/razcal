@@ -20,7 +20,7 @@ And of course, don't use xml-like whatsoever for the layout,
 we already have too much xml-like language to describe GUI.
 
 That is how razcal idea was born, written in [Nim](https://nim-lang.org/),
-using Layx inspired layout language, scripted by [moonscript](https://moonscript.org/)
+using Layx inspired layout language, scripted by [MoonScript](https://MoonScript.org/)
 on top of [Lua](https://www.lua.org/) vm.
 Currently using [kiwi](https://github.com/yglukhov/kiwi) as it's constraint solver algorithm.
 Thanks to Nim powerful metaprogramming feature, binding to Lua is easy,
@@ -28,12 +28,22 @@ razcal use [nimLUA](https://github.com/jangko/nimLUA) to automate binding proces
 interleaved with hand coded glue code.
 
 You might be tempted to say this is an overly ambitious project.
-Using new emerging language like Nim and moonscript,
+Using new emerging language like Nim and MoonScript,
 plus a home brew layout language, what kind of hybrid mutant razcal will be?
 
 I will be nice, you can choose what component to be included in your final executable,
-you can add more functionality either using Nim, Lua, or moonscript as a module.
+you can add more functionality either using Nim, Lua, or MoonScript as a module.
 It already and always be easy to build.
+
+### Interesting facts
+
+* The main language to develop razcal is Nim, it has indentation significant syntax.
+* MoonScript provides a clean syntax using significant whitespace that avoids all the keyword noise typically seen in a Lua script.
+* razcal Layout Language, being inspired by Layx, also has significant whitespace syntax.
+
+And I'm thinking to use Yaml as configuration script, which is also use indentation based syntax.
+Python?, hmm....., the standard Python is too big, perhaps MicroPython is more suitable.
+
 ### roadmap
 
 right now, razcal pretty much still an embryo.
