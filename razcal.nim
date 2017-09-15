@@ -2,12 +2,17 @@ import os, glfw, nvg, nimLUA, opengl, parser, razcontext, semcheck
 import streams
 
 proc load_glex() {.importc, cdecl.}
+proc nvgTextBounds*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =
+  result = ctx.nvgTextBounds(x, y, str, nil, nil)
 
-proc bindNVG(L: PState, nvg: NVGcontext) =
+proc nvgText*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =
+  result = ctx.nvgText(x, y, str, nil)
+
+proc bindNVG(LX: PState, nvg: NVGcontext) =
 
   #nimLuaOptions(nloDebug, true)
-  L.bindObject(NVGContext -> "nvg"):
-    nvgCreate -> "create"
+  LX.bindObject(NVGContext -> "nvg"):
+    #nvgCreate -> "create"
     #~nvgDelete
     nvgBeginFrame -> "beginFrame"
     nvgCancelFrame -> "cancelFrame"
@@ -85,12 +90,20 @@ proc bindNVG(L: PState, nvg: NVGcontext) =
     nvgTextMetrics -> "textMetrics"
     nvgTextBreakLines -> "textBreakLines"
 
-  L.bindConst("nvg"):
+  LX.bindConst("nvg"):
     NVG_ANTIALIAS -> "ANTIALIAS"
     NVG_STENCIL_STROKES -> "STENCIL_STROKES"
     NVG_DEBUG -> "DEBUG"
+    NVG_ALIGN_LEFT -> "ALIGN_LEFT"
+    NVG_ALIGN_CENTER -> "ALIGN_CENTER"
+    NVG_ALIGN_RIGHT -> "ALIGN_RIGHT"
+    NVG_ALIGN_TOP -> "ALIGN_TOP"
+    NVG_ALIGN_MIDDLE -> "ALIGN_MIDDLE"
+    NVG_ALIGN_BOTTOM -> "ALIGN_BOTTOM"
+    NVG_ALIGN_BASELINE -> "ALIGN_BASELINE"
 
-  L.bindFunction("nvg"):
+  #nimLuaOptions(nloDebug, true)
+  LX.bindFunction("nvg"):
     nvgRGB -> "RGB"
     nvgRGBf -> "RGBf"
     nvgRGBA -> "RGBA"
@@ -114,9 +127,9 @@ proc bindNVG(L: PState, nvg: NVGcontext) =
     nvgTransformPoint -> "transformPoint"
 
   # store Layout reference
-  L.pushLightUserData(cast[pointer](genLuaID())) # push key
-  L.pushLightUserData(cast[pointer](nvg)) # push value
-  L.setTable(LUA_REGISTRYINDEX)           # registry[lay.addr] = lay
+  LX.pushLightUserData(cast[pointer](genLuaID())) # push key
+  LX.pushLightUserData(cast[pointer](nvg)) # push value
+  LX.setTable(LUA_REGISTRYINDEX)           # registry[lay.addr] = lay
 
   # register the only entry point of layout hierarchy to lua
   proc nvgProxy(L: PState): cint {.cdecl.} =
@@ -131,8 +144,8 @@ proc bindNVG(L: PState, nvg: NVGcontext) =
     discard L.setMetatable(-2)
     return 1
 
-  L.pushCfunction(nvgProxy)
-  L.setGlobal("getNVG")
+  LX.pushCfunction(nvgProxy)
+  LX.setGlobal("getNVG")
 
 proc loadMainScript(ctx: RazContext) =
   let fileName = if paramCount() == 0: "main.raz" else: paramStr(1)
@@ -166,6 +179,30 @@ proc callF(ctx: RazContext, funcName: string) =
     L.pop(1)
     ctx.otherError(errLua, errorMsg)
 
+proc loadFonts(nvg: NVGContext) =
+  let icons = nvg.nvgCreateFont("icons", "examples/fonts/entypo.ttf")
+  if icons == -1:
+    echo "Could not add font icons."
+    return
+
+  let sans = nvg.nvgCreateFont("sans", "examples/fonts/Roboto-Regular.ttf")
+  if sans == -1:
+    echo "Could not add font italic."
+    return
+
+  let bold = nvg.nvgCreateFont("sans-bold", "examples/fonts/Roboto-Bold.ttf")
+  if bold == -1:
+    echo "Could not add font bold."
+    return
+
+  let emoji = nvg.nvgCreateFont("emoji", "examples/fonts/NotoEmoji-Regular.ttf")
+  if emoji == -1:
+    echo "Could not add font emoji."
+    return
+
+  discard nvg.nvgAddFallbackFontId(sans, emoji)
+  discard nvg.nvgAddFallbackFontId(bold, emoji)
+
 proc main =
   var ctx = openRazContext()
   var L = ctx.getLua()
@@ -182,7 +219,16 @@ proc main =
     echo "Could not init nanovg."
     return
 
+  nvg.loadFonts()
   L.bindNVG(nvg)
+
+  try:
+    ctx.executeLua("main.lua")
+  except OtherError as ex:
+    echo ex.msg
+  except Exception as ex:
+    echo "unknown error: ", ex.msg
+    writeStackTrace()
 
   while not w.shouldClose():
     let s = w.framebufSize()
@@ -191,7 +237,13 @@ proc main =
     glClearColor(0.3, 0.3, 0.32, 1.0)
     glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
 
-    ctx.callF("updateScene")
+    try:
+      ctx.callF("updateScene")
+    except OtherError as ex:
+      echo ex.msg
+    except Exception as ex:
+      echo "unknown error: ", ex.msg
+      writeStackTrace()
 
     nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
 

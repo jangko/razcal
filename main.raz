@@ -1,0 +1,52 @@
+::common
+  @ width, height = next.width | 90, next.height | 70
+
+::firstRow
+  @ top, left = parent.top, prev.right + 10 | parent.left
+
+::secondRow
+  @ top, right = parent.top + height + 10, prev[4].right
+
+::thirdRow
+  : color: red
+  ! click: "hello"
+  @ top, right = parent.top + (height + 10) * 2, prev[4].right
+
+::commonHeader
+  @ top = parent.top; height = parent.height
+
+year
+  flex
+    top >= 0; height = 60
+    left, right = months.left, months.right
+    top - parent.top = parent.bottom - months.bottom
+
+year._prev::commonHeader
+  @ left, width = parent.left, 60    
+    
+year._next::commonHeader
+  @ right, width = parent.right, 60
+
+year.year::commonHeader
+  @ right, left = _next.left - 10, _prev.right + 10
+
+months
+  flex
+    right, bottom = child[3].right, child[].bottom
+    left - parent.left = parent.right - right
+    top = year.bottom + 10
+
+months._1::firstRow::common
+months._2::firstRow::common
+months._3::firstRow::common
+months._4::firstRow::common
+
+months._5::secondRow::common
+months._6::secondRow::common
+months._7::secondRow::common
+months._8::secondRow::common
+
+months._9::thirdRow::common
+months._10::thirdRow::common
+months._11::thirdRow::common
+months._12::thirdRow::common

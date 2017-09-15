@@ -1,0 +1,107 @@
+--function View:onClick()
+--  print("my name is: ", self.name)
+--end
+
+local lay = getLayout()
+local root = lay:getRoot()
+
+local yy = root:findChild(lay:getIdent("year"))
+
+local _prev = yy:findChild(lay:getIdent("_prev"))
+local _next = yy:findChild(lay:getIdent("_next"))
+local _year = yy:findChild(lay:getIdent("year"))
+--print("name: ", yy.name,   _prev.name,    _year.name,   _next.name)
+--print("- top:", yy.top,    _prev.top,     _year.top,    _next.top)
+--print("- bot:", yy.bottom, _prev.bottom,  _year.bottom, _next.bottom)
+--print("- lef:", yy.left,   _prev.left,    _year.left,   _next.left)
+--print("- rig:", yy.right,  _prev.right,   _year.right,  _next.right)
+
+local mm = root:findChild(lay:getIdent("months"))
+--print("name: ", mm.name)
+--print("- top:", mm.top)
+--print("- bot:", mm.bottom)
+--print("- lef:", mm.left)
+--print("- rig:", mm.right)
+
+local _1 = mm:findChild(lay:getIdent("_1"))
+local _2 = mm:findChild(lay:getIdent("_2"))
+local _3 = mm:findChild(lay:getIdent("_3"))
+local _4 = mm:findChild(lay:getIdent("_4"))
+--print("name: ", _1.name,   _2.name,    _3.name,   _4.name)
+--print("- top:", _1.top,    _2.top,     _3.top,    _4.top)
+--print("- bot:", _1.bottom, _2.bottom,  _3.bottom, _4.bottom)
+--print("- lef:", _1.left,   _2.left,    _3.left,   _4.left)
+--print("- rig:", _1.right,  _2.right,   _3.right,  _4.right)
+
+local _5 = mm:findChild(lay:getIdent("_5"))
+local _6 = mm:findChild(lay:getIdent("_6"))
+local _7 = mm:findChild(lay:getIdent("_7"))
+local _8 = mm:findChild(lay:getIdent("_8"))
+--print("name: ", _5.name,   _6.name,    _7.name,   _8.name)
+--print("- top:", _5.top,    _6.top,     _7.top,    _8.top)
+--print("- bot:", _5.bottom, _6.bottom,  _7.bottom, _8.bottom)
+--print("- lef:", _5.left,   _6.left,    _7.left,   _8.left)
+--print("- rig:", _5.right,  _6.right,   _7.right,  _8.right)
+--
+local _9 = mm:findChild(lay:getIdent("_9"))
+local _10 = mm:findChild(lay:getIdent("_10"))
+local _11 = mm:findChild(lay:getIdent("_11"))
+local _12 = mm:findChild(lay:getIdent("_12"))
+--print("name: ", _9.name,   _10.name,    _11.name,   _12.name)
+--print("- top:", _9.top,    _10.top,     _11.top,    _12.top)
+--print("- bot:", _9.bottom, _10.bottom,  _11.bottom, _12.bottom)
+--print("- lef:", _9.left,   _10.left,    _11.left,   _12.left)
+--print("- rig:", _9.right,  _10.right,   _11.right,  _12.right)
+
+
+function nvg:drawButton(x, y, w, h, col, text)
+  local vg = self
+  local cornerRadius = 4.0
+  local bg = vg:linearGradient(x,y,x,y+h, nvg.RGBA(255,255,255,32), nvg.RGBA(0,0,0,32))
+  local tw = vg:textBounds(0,0, text)
+  
+  vg:beginPath()
+    vg:roundedRect(x+1,y+1, w-2,h-2, cornerRadius-1)
+    vg:fillColor(col)
+    vg:fill()
+    vg:fillPaint(bg)
+	vg:fill()
+
+	vg:beginPath()
+	vg:roundedRect(x+0.5,y+0.5, w-1,h-1, cornerRadius-0.5)
+	vg:strokeColor(nvg.RGBA(0,0,0,48))
+	vg:stroke()
+  
+ 	vg:fontSize(20.0)
+	vg:fontFace("sans-bold")
+	vg:textAlign(nvg.ALIGN_LEFT + nvg.ALIGN_MIDDLE)
+	vg:fillColor(nvg.RGBA(0,0,0,160))
+	vg:text(x+w*0.5-tw*0.5,y+h*0.5-1,text)
+	vg:fillColor(nvg.RGBA(255,255,255,160))
+	vg:text(x+w*0.5-tw*0.5,y+h*0.5,text)
+end
+
+function updateScene()
+  local vg = getNVG()
+  local red = nvg.RGBA(128,16,8,255)
+
+  vg:beginFrame(640, 480, 1.0)
+  vg:drawButton(_prev.left, _prev.top, _prev.width, _prev.height, red, _prev.name)
+  vg:drawButton(_next.left, _next.top, _next.width, _next.height, red, _next.name)
+  vg:drawButton(_year.left, _year.top, _year.width, _year.height, red, _year.name)
+
+  vg:drawButton(_1.left, _1.top, _1.width, _1.height, red, _1.name)
+  vg:drawButton(_2.left, _2.top, _2.width, _2.height, red, _2.name)
+  vg:drawButton(_3.left, _3.top, _3.width, _3.height, red, _3.name)
+  vg:drawButton(_4.left, _4.top, _4.width, _4.height, red, _4.name)
+  vg:drawButton(_5.left, _5.top, _5.width, _5.height, red, _5.name)
+  vg:drawButton(_6.left, _6.top, _6.width, _6.height, red, _6.name)
+  vg:drawButton(_7.left, _7.top, _7.width, _7.height, red, _7.name)
+  vg:drawButton(_8.left, _8.top, _8.width, _8.height, red, _8.name)
+  vg:drawButton(_9.left, _9.top, _9.width, _9.height, red, _9.name)
+  vg:drawButton(_10.left, _10.top, _10.width, _10.height, red, _10.name)
+  vg:drawButton(_11.left, _11.top, _11.width, _11.height, red, _11.name)
+  vg:drawButton(_12.left, _12.top, _12.width, _12.height, red, _12.name)
+  vg:stroke(1.0, 0.0, 0.0, 1.0, 2.0)
+  vg:endFrame()
+end

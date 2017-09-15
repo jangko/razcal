@@ -74,3 +74,6 @@ documentation none, tutorial none.
 * test suite
   * robust test suite for both Nim and Lua side
   * automated build system + test
+
+The first screenshot ever:
+![Screenshot](https://github.com/jangko/razcal/tree/master/examples/screenshot-1.png)
