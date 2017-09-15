@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <GL\glu.h>
 #include "GL\glext.h"
+#include <stdio.h>
 
 PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate;
 PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
@@ -43,43 +44,56 @@ PFNGLBINDBUFFERRANGEPROC glBindBufferRange;
 PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
 PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays;
 
-void load_glex() {
-  glBlendFuncSeparate = (PFNGLBLENDFUNCSEPARATEPROC) wglGetProcAddress("glBlendFuncSeparate");
-  glGetShaderInfoLog = (PFNGLGETSHADERINFOLOGPROC) wglGetProcAddress("glGetShaderInfoLog");
-  glGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC) wglGetProcAddress("glGetProgramInfoLog");
-  glCreateProgram = (PFNGLCREATEPROGRAMPROC) wglGetProcAddress("glCreateProgram");
-  glCreateShader = (PFNGLCREATESHADERPROC) wglGetProcAddress("glCreateShader");
-  glShaderSource = (PFNGLSHADERSOURCEPROC) wglGetProcAddress("glShaderSource");
-  glCompileShader = (PFNGLCOMPILESHADERPROC) wglGetProcAddress("glCompileShader");
-  glGetShaderiv = (PFNGLGETSHADERIVPROC) wglGetProcAddress("glGetShaderiv");
-  glAttachShader = (PFNGLATTACHSHADERPROC) wglGetProcAddress("glAttachShader");
-  glBindAttribLocation = (PFNGLBINDATTRIBLOCATIONPROC) wglGetProcAddress("glBindAttribLocation");
-  glLinkProgram = (PFNGLLINKPROGRAMPROC) wglGetProcAddress("glLinkProgram");
-  glGetProgramiv = (PFNGLGETPROGRAMIVPROC) wglGetProcAddress("glGetProgramiv");
-  glDeleteProgram = (PFNGLDELETEPROGRAMPROC) wglGetProcAddress("glDeleteProgram");
-  glDeleteShader = (PFNGLDELETESHADERPROC) wglGetProcAddress("glDeleteShader");
-  glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC) wglGetProcAddress("glGetUniformLocation");
-  glGenBuffers = (PFNGLGENBUFFERSPROC) wglGetProcAddress("glGenBuffers");
-  glUniform4fv = (PFNGLUNIFORM4FVPROC) wglGetProcAddress("glUniform4fv");
-  glStencilOpSeparate = (PFNGLSTENCILOPSEPARATEPROC) wglGetProcAddress("glStencilOpSeparate");
-  glUseProgram = (PFNGLUSEPROGRAMPROC) wglGetProcAddress("glUseProgram");
-  glActiveTexture = (PFNGLACTIVETEXTUREPROC) wglGetProcAddress("glActiveTexture");
-  glBindBuffer = (PFNGLBINDBUFFERPROC) wglGetProcAddress("glBindBuffer");
-  glBufferData = (PFNGLBUFFERDATAPROC) wglGetProcAddress("glBufferData");
-  glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC) wglGetProcAddress("glEnableVertexAttribArray");
-  glVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC) wglGetProcAddress("glVertexAttribPointer");
-  glUniform1i = (PFNGLUNIFORM1IPROC) wglGetProcAddress("glUniform1i");
-  glUniform2fv = (PFNGLUNIFORM2FVPROC) wglGetProcAddress("glUniform2fv");
-  glDisableVertexAttribArray = (PFNGLDISABLEVERTEXATTRIBARRAYPROC) wglGetProcAddress("glDisableVertexAttribArray");
-  glDeleteBuffers = (PFNGLDELETEBUFFERSPROC) wglGetProcAddress("glDeleteBuffers");
-
-  glGetUniformBlockIndex = (PFNGLGETUNIFORMBLOCKINDEXPROC) wglGetProcAddress("glGetUniformBlockIndex");
-  glGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC) wglGetProcAddress("glGenVertexArrays");
-  glUniformBlockBinding = (PFNGLUNIFORMBLOCKBINDINGPROC) wglGetProcAddress("glUniformBlockBinding");
-  glGenerateMipmap = (PFNGLGENERATEMIPMAPPROC) wglGetProcAddress("glGenerateMipmap");
-  glBindBufferRange = (PFNGLBINDBUFFERRANGEPROC) wglGetProcAddress("glBindBufferRange");
-  glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC) wglGetProcAddress("glBindVertexArray");
-  glDeleteVertexArrays = (PFNGLDELETEVERTEXARRAYSPROC) wglGetProcAddress("glDeleteVertexArrays");
-}
+#define LOADPFNGL(GLVAR, PFNGL, FNNAME) \
+  GLVAR = (PFNGL) wglGetProcAddress(FNNAME); \
+  if(GLVAR == NULL) { \
+    printf(stderr, "`%s` cannot be loaded\n", FNNAME); \
+    numErr++; \
+  }
 
 #endif
+
+void load_glex() {
+  int numErr = 0;
+
+#if defined(_WIN32)
+  LOADPFNGL(glBlendFuncSeparate, PFNGLBLENDFUNCSEPARATEPROC, "glBlendFuncSeparate");
+  LOADPFNGL(glGetShaderInfoLog, PFNGLGETSHADERINFOLOGPROC, "glGetShaderInfoLog");
+  LOADPFNGL(glGetProgramInfoLog, PFNGLGETPROGRAMINFOLOGPROC, "glGetProgramInfoLog");
+  LOADPFNGL(glCreateProgram, PFNGLCREATEPROGRAMPROC, "glCreateProgram");
+  LOADPFNGL(glCreateShader, PFNGLCREATESHADERPROC, "glCreateShader");
+  LOADPFNGL(glShaderSource, PFNGLSHADERSOURCEPROC, "glShaderSource");
+  LOADPFNGL(glCompileShader, PFNGLCOMPILESHADERPROC, "glCompileShader");
+  LOADPFNGL(glGetShaderiv, PFNGLGETSHADERIVPROC, "glGetShaderiv");
+  LOADPFNGL(glAttachShader, PFNGLATTACHSHADERPROC, "glAttachShader");
+  LOADPFNGL(glBindAttribLocation, PFNGLBINDATTRIBLOCATIONPROC, "glBindAttribLocation");
+  LOADPFNGL(glLinkProgram, PFNGLLINKPROGRAMPROC, "glLinkProgram");
+  LOADPFNGL(glGetProgramiv, PFNGLGETPROGRAMIVPROC, "glGetProgramiv");
+  LOADPFNGL(glDeleteProgram, PFNGLDELETEPROGRAMPROC, "glDeleteProgram");
+  LOADPFNGL(glDeleteShader, PFNGLDELETESHADERPROC, "glDeleteShader");
+  LOADPFNGL(glGetUniformLocation, PFNGLGETUNIFORMLOCATIONPROC, "glGetUniformLocation");
+  LOADPFNGL(glGenBuffers, PFNGLGENBUFFERSPROC, "glGenBuffers");
+  LOADPFNGL(glUniform4fv, PFNGLUNIFORM4FVPROC, "glUniform4fv");
+  LOADPFNGL(glStencilOpSeparate, PFNGLSTENCILOPSEPARATEPROC, "glStencilOpSeparate");
+  LOADPFNGL(glUseProgram, PFNGLUSEPROGRAMPROC, "glUseProgram");
+  LOADPFNGL(glActiveTexture, PFNGLACTIVETEXTUREPROC, "glActiveTexture");
+  LOADPFNGL(glBindBuffer, PFNGLBINDBUFFERPROC, "glBindBuffer");
+  LOADPFNGL(glBufferData, PFNGLBUFFERDATAPROC, "glBufferData");
+  LOADPFNGL(glEnableVertexAttribArray, PFNGLENABLEVERTEXATTRIBARRAYPROC, "glEnableVertexAttribArray");
+  LOADPFNGL(glVertexAttribPointer, PFNGLVERTEXATTRIBPOINTERPROC, "glVertexAttribPointer");
+  LOADPFNGL(glUniform1i, PFNGLUNIFORM1IPROC, "glUniform1i");
+  LOADPFNGL(glUniform2fv, PFNGLUNIFORM2FVPROC, "glUniform2fv");
+  LOADPFNGL(glDisableVertexAttribArray, PFNGLDISABLEVERTEXATTRIBARRAYPROC, "glDisableVertexAttribArray");
+  LOADPFNGL(glDeleteBuffers, PFNGLDELETEBUFFERSPROC, "glDeleteBuffers");
+
+  LOADPFNGL(glGetUniformBlockIndex, PFNGLGETUNIFORMBLOCKINDEXPROC, "glGetUniformBlockIndex");
+  LOADPFNGL(glGenVertexArrays, PFNGLGENVERTEXARRAYSPROC, "glGenVertexArrays");
+  LOADPFNGL(glUniformBlockBinding, PFNGLUNIFORMBLOCKBINDINGPROC, "glUniformBlockBinding");
+  LOADPFNGL(glGenerateMipmap, PFNGLGENERATEMIPMAPPROC, "glGenerateMipmap");
+  LOADPFNGL(glBindBufferRange, PFNGLBINDBUFFERRANGEPROC, "glBindBufferRange");
+  LOADPFNGL(glBindVertexArray, PFNGLBINDVERTEXARRAYPROC, "glBindVertexArray");
+  LOADPFNGL(glDeleteVertexArrays, PFNGLDELETEVERTEXARRAYSPROC, "glDeleteVertexArrays");
+#endif
+
+  if(numErr > 0) exit(1);
+}

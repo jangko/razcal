@@ -35,7 +35,7 @@ else:
 import os
 const ThisPath* = currentSourcePath.splitPath.head
 
-{.passC: " -include\"GL/gl.h\" -include\"nanovg.h\" -include\"nanovg/GL/glext.h\"".}
+{.passC: " -include\"GL/gl.h\" -include\"nanovg.h\" -include\"nanovg/load_glex.h\"".}
 {.passC: "-DNANOVG_"&GLVersion&"_IMPLEMENTATION".}
 {.passC: "-I"&ThisPath&"/nanovg".}
 {.compile: ThisPath/"nanovg/nanovg.c"}

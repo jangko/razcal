@@ -1,0 +1,43 @@
+#ifndef load_glex_h
+#define load_glex_h
+
+#include "GL/glext.h"
+
+extern PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate;
+extern PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
+extern PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
+extern PFNGLCREATEPROGRAMPROC glCreateProgram;
+extern PFNGLCREATESHADERPROC glCreateShader;
+extern PFNGLSHADERSOURCEPROC glShaderSource;
+extern PFNGLCOMPILESHADERPROC glCompileShader;
+extern PFNGLGETSHADERIVPROC glGetShaderiv;
+extern PFNGLATTACHSHADERPROC glAttachShader;
+extern PFNGLBINDATTRIBLOCATIONPROC glBindAttribLocation;
+extern PFNGLLINKPROGRAMPROC glLinkProgram;
+extern PFNGLGETPROGRAMIVPROC glGetProgramiv;
+extern PFNGLDELETEPROGRAMPROC glDeleteProgram;
+extern PFNGLDELETESHADERPROC glDeleteShader;
+extern PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
+extern PFNGLGENBUFFERSPROC glGenBuffers;
+extern PFNGLUNIFORM4FVPROC glUniform4fv;
+extern PFNGLSTENCILOPSEPARATEPROC glStencilOpSeparate;
+extern PFNGLUSEPROGRAMPROC glUseProgram;
+extern PFNGLACTIVETEXTUREPROC glActiveTexture;
+extern PFNGLBINDBUFFERPROC glBindBuffer;
+extern PFNGLBUFFERDATAPROC glBufferData;
+extern PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
+extern PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
+extern PFNGLUNIFORM1IPROC glUniform1i;
+extern PFNGLUNIFORM2FVPROC glUniform2fv;
+extern PFNGLDISABLEVERTEXATTRIBARRAYPROC glDisableVertexAttribArray;
+extern PFNGLDELETEBUFFERSPROC glDeleteBuffers;
+
+extern PFNGLGETUNIFORMBLOCKINDEXPROC glGetUniformBlockIndex;
+extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
+extern PFNGLUNIFORMBLOCKBINDINGPROC glUniformBlockBinding;
+extern PFNGLGENERATEMIPMAPPROC glGenerateMipmap;
+extern PFNGLBINDBUFFERRANGEPROC glBindBufferRange;
+extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
+extern PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays;
+
+#endif

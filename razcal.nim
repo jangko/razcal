@@ -1,6 +1,6 @@
-import os, glfw, nvg, nimLUA
+import os, glfw, nvg, nimLUA, opengl
 
-proc load_glex() {.importc.}
+proc load_glex() {.importc, cdecl.}
 
 proc bindNVG(L: PState) =
 
@@ -105,11 +105,28 @@ proc bindNVG(L: PState) =
     nvgTransformPremultiply -> "transformPremultiply"
     nvgTransformInverse -> "transformInverse"
     nvgTransformPoint -> "transformPoint"
-  
+
 proc main =
+  var L = newNimLua()
+  L.bindNVG()
+
   glfw.init()
   var w = newGlWin()
-  sleep(3000)
+  w.makeContextCurrent()
+  load_glex()
+  opengl.loadExtensions()
+
+  var nvg = nvgCreate(NVG_ANTIALIAS or NVG_STENCIL_STROKES or NVG_DEBUG)
+  if nvg.pointer == nil:
+    echo "Could not init nanovg."
+    return
+
+  while not w.shouldClose():
+    let s = w.framebufSize()
+    glViewport(0, 0, GLsizei(s.w), GLsizei(s.h))
+    w.update()
+
+  nvg.nvgDelete()
   w.destroy()
   glfw.terminate()
 
