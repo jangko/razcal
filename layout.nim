@@ -1,15 +1,4 @@
-import kiwi, tables, idents
-
-type
-  View* = ref object
-    top*, left*, right*, bottom*: kiwi.Variable
-    width*, height*: kiwi.Variable
-    centerX*, centerY*: kiwi.Variable
-    views*: Table[Ident, View]  # map string to children view
-    children*: seq[View]        # children view
-    parent*: View               # nil if no parent/root
-    name*: Ident                # view's name
-    idx*: int                   # index into children position/-1 if invalid
+import kiwi, tables, idents, ast
 
 proc newView*(name: Ident): View =
   new(result)
@@ -106,3 +95,8 @@ proc getNextIdx*(view: View, idx: int): View =
 
 proc findChild*(view: View, id: Ident): View =
   result = view.views.getOrDefault(id)
+
+proc newAnimation*(duration: float64): Animation =
+  new(result)
+  result.duration = duration
+

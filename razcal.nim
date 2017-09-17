@@ -237,14 +237,6 @@ proc main =
     glClearColor(0.3, 0.3, 0.32, 1.0)
     glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
 
-    try:
-      ctx.callF("updateScene")
-    except OtherError as ex:
-      echo ex.msg
-    except Exception as ex:
-      echo "unknown error: ", ex.msg
-      writeStackTrace()
-
     nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
 
     let
@@ -258,6 +250,14 @@ proc main =
     nvg.nvgStroke(0.0, 0.5, 1.0, 1.0, stroke_width)
 
     nvg.nvgEndFrame()
+
+    try:
+      ctx.callF("updateScene")
+    except OtherError as ex:
+      echo ex.msg
+    except Exception as ex:
+      echo "unknown error: ", ex.msg
+      writeStackTrace()
 
     w.swapBufs()
     waitEvents()

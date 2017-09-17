@@ -77,7 +77,9 @@ type
     errDuplicateView
     errDuplicateClass
     errDuplicateAlias
+    errDuplicateAnim
     errDuplicateParam
+    errRecursiveAlias
     errClassNotFound
     errParamCountNotMatch
     errUndefinedVar
@@ -111,6 +113,7 @@ type
 
     warnParamNotUsed
     warnClassNotUsed
+    warnAliasNotUsed
 
 const
   InvalidFileIDX* = int32(-1)
@@ -147,7 +150,9 @@ const
     errDuplicateView: "duplicate view not allowed: `$1`, the other one is here: $2",
     errDuplicateClass: "duplicate class not allowed: `$1`, the other one is here: $2",
     errDuplicateAlias: "duplicate alias not allowed: `$1`, the other one is here: $2",
+    errDuplicateAnim: "duplicate animation not allowed: `$1`, the other one is here: $2",
     errDuplicateParam: "duplicate param name: `$1`",
+    errRecursiveAlias: "alias recursion not allowed: `$1`, the other one is here: $2",
     errClassNotFound: "class `$1` not found",
     errParamCountNotMatch: "expected $1 param(s) but got $2 param(s)",
     errUndefinedVar: "`$1` is an undefined constraint variable",
@@ -181,6 +186,7 @@ const
 
     warnParamNotUsed: "param `$1` not used",
     warnClassNotUsed: "class `$1` not used",
+    warnAliasNotUsed: "alias `$1` not used",
   ]
 
 proc openRazContext*(): RazContext =

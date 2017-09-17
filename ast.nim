@@ -1,4 +1,4 @@
-import sets, idents, strutils, layout, razcontext, kiwi, tables
+import sets, idents, strutils, razcontext, kiwi, tables
 
 type
   Scope* = ref object
@@ -6,12 +6,28 @@ type
     symbols*: HashSet[Symbol]
     parent*: Scope
 
+  View* = ref object
+    top*, left*, right*, bottom*: kiwi.Variable
+    width*, height*: kiwi.Variable
+    centerX*, centerY*: kiwi.Variable
+    views*: Table[Ident, View]  # map string to children view
+    children*: seq[View]        # children view
+    parent*: View               # nil if no parent/root
+    name*: Ident                # view's name
+    idx*: int                   # index into children position/-1 if invalid
+    symNode*: Node
+    node*: Node
+
+  Animation* = ref object of IDobj
+    duration*: float64
+
   ClassContext* = ref object
     paramTable*: Table[Ident, Node] # map param name to SymbolNode
     n*: Node # Node.nkClass
 
   SymKind* = enum
     skUnknown, skView, skClass, skAlias, skStyle, skParam
+    skAnimation
 
   SymFlags* = enum
     sfUsed
@@ -25,6 +41,10 @@ type
       class*: ClassContext
     of skParam:
       value*: Node   # the default value of a param or nil
+    of skAlias:
+      alias*: Node
+    of skAnimation:
+      anim*: Animation
     else: nil
     flags*: set[SymFlags]
     name*: Ident
@@ -254,6 +274,14 @@ proc newParamSymbol*(n: Node, val: Node, pos: int): Symbol =
   result = newSymbol(skParam, n)
   result.value = val
   result.pos = pos
+
+proc newAliasSymbol*(n: Node, alias: Node): Symbol =
+  result = newSymbol(skAlias, n)
+  result.alias = alias
+
+proc newAnimationSymbol*(n: Node, anim: Animation): Symbol =
+  result = newSymbol(skAnimation, n)
+  result.anim = anim
 
 template symString*(n: Node): string =
   assert(n.kind == nkSymbol)

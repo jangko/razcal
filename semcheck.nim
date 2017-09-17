@@ -4,16 +4,13 @@ import nimLUA, keywords
 type
   Layout* = ref object of IDobj
     root: View                   # every layout/scene root
-    viewTbl: Table[View, Node]   # view to SymbolNode.skView
     classTbl: Table[Ident, Node] # string to SymbolNode.skClass
     aliasTbl: Table[Ident, Node]
+    animTbl: Table[Ident, Node]
     solver: kiwi.Solver          # constraint solver
     context: RazContext          # ref to app global context
     lastView: View               # last processed parent view/current View
     emptyNode: Node
-
-template hash(view: View): Hash =
-  hash(cast[int](view))
 
 proc newInternalError(fileName: string, line: int, msg: string): InternalError =
   new(result)
@@ -39,16 +36,17 @@ proc createView(lay: Layout, n: Node): Node =
   var view = lay.lastView.newView(n.ident)
   result   = newViewSymbol(n, view).newSymbolNode()
   lay.lastView = view
-  lay.viewTbl[view] = result
+  view.symNode = result
+  view.node = n
   lay.solver.setBasicConstraint(view)
 
 # one application can have multiple layout a.k.a 'page'
 proc newLayout*(id: int, context: RazContext): Layout =
   new(result)
   result.id = id
-  result.viewTbl = initTable[View, Node]()
   result.classTbl = initTable[Ident, Node]()
   result.aliasTbl = initTable[Ident, Node]()
+  result.animTbl = initTable[Ident, Node]()
   result.solver = newSolver()
   result.context = context
   result.emptyNode = newNode(nkEmpty)
@@ -56,7 +54,8 @@ proc newLayout*(id: int, context: RazContext): Layout =
   let root = context.getIdent("root")
   let n = newIdentNode(root)
   result.root = newView(root)
-  result.viewTbl[result.root] = newViewSymbol(n, result.root).newSymbolNode()
+  result.root.symNode = newViewSymbol(n, result.root).newSymbolNode()
+  result.root.node = n
   result.solver.setBasicConstraint(result.root)
 
 proc getRoot(lay: Layout): View =
@@ -134,8 +133,7 @@ proc semViewName(lay: Layout, n: Node, lastIdent: Node): Node =
     if view.isNil:
       result = lay.createView(n)
     else:
-      ensure(lay.viewTbl.hasKey(view))
-      let symNode = lay.viewTbl[view]
+      let symNode = view.symNode
       if lastIdent == n:
         let info = symNode.lineInfo
         let prev = lay.context.toString(info)
@@ -279,11 +277,12 @@ proc semAliasList(lay: Layout, n: Node) =
     ensure(m[0].kind == nkIdent)
     let alias = lay.aliasTbl.getOrDefault(m[0].ident)
     if alias.isNil:
-      lay.aliasTbl[m[0].ident] = m
+      let sym = newAliasSymbol(m[0], m[1]).newSymbolNode()
+      lay.aliasTbl[m[0].ident] = sym
     else:
-      let info = alias[0].lineInfo
+      let info = alias.lineInfo
       let prev = lay.context.toString(info)
-      lay.sourceError(errDuplicateAlias, m[0], alias[0].ident, prev)
+      lay.sourceError(errDuplicateAlias, m[0], alias.sym.name, prev)
 
 proc semAnimList(lay: Layout, n: Node) =
   discard
@@ -348,7 +347,9 @@ proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
   of nkIdent:
     let alias = lay.aliasTbl.getOrDefault(n.ident)
     if alias.isNil: result = n
-    else: result = alias[1]
+    else:
+      alias.sym.flags.incl(sfUsed)
+      result = alias.sym.alias
   of nkUInt, nkString:
     result = n
   else:
@@ -375,7 +376,9 @@ proc instantiateArg(lay: Layout, n: Node): Node =
   of nkIdent:
     let alias = lay.aliasTbl.getOrDefault(n.ident)
     if alias.isNil: result = n
-    else: result = alias[1]
+    else:
+      alias.sym.flags.incl(sfUsed)
+      result = alias.sym.alias
   else: result = n
 
 proc secViewClass(lay: Layout, n: Node) =
@@ -509,13 +512,14 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
         if alias.isNil:
           lay.sourceError(errUndefinedVar, n, n.ident)
         else:
-          result = lay.resolveTerm(alias[1], lastIdent, choiceMode)
+          alias.sym.flags.incl(sfUsed)
+          result = lay.resolveTerm(alias.sym.alias, lastIdent, choiceMode)
     else:
       let view = lay.findRelation(n, id)
       if view.isNil:
         if choiceMode: return lay.emptyNode
         else: lay.sourceError(errRelationNotFound, n, n.ident, lay.lastView.name)
-      result = lay.viewTbl[view]
+      result = view.symNode
   of nkDotCall:
     let tempView = lay.lastView
     ensure(n.len == 2)
@@ -537,7 +541,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       if view.isNil:
         if choiceMode: return lay.emptyNode
         else: lay.sourceError(errWrongRelationIndex, n[1], idx)
-      result = lay.viewTbl[view]
+      result = view.symNode
     else:
       lay.sourceError(errUndefinedRel, n[0], n[0].ident)
   of nkString:
@@ -767,7 +771,8 @@ proc secFlexExpr(lay: Layout, n: Node, choiceMode = false): Node =
       if alias.isNil:
         lay.sourceError(errUndefinedVar, n, n.ident)
       else:
-        result = lay.secFlexExpr(alias[1], choiceMode)
+        alias.sym.flags.incl(sfUsed)
+        result = lay.secFlexExpr(alias.sym.alias, choiceMode)
   of nkUint:
     result = n
   of nkDotCall:
@@ -982,7 +987,22 @@ proc secClass(lay: Layout, n: Node) =
   discard
 
 proc secAnimList(lay: Layout, n: Node) =
-  discard
+  ensure(n.len == 3)
+  let name = n[0].ident
+  let duration = n[1].toNumber()
+
+  let anim = lay.animTbl.getOrDefault(name)
+  if anim.isNil:
+    let ani = newAnimation(duration)
+    let sym = newAnimationSymbol(n[0], ani).newSymbolNode()
+    lay.animTbl[name] = sym
+  else:
+    let prev = lay.context.toString(anim.lineInfo)
+    lay.sourceError(errDuplicateAnim, n[0], name, prev)
+
+  let body = n[2]
+  for m in body.sons:
+    ensure(m.kind == nkAnim)
 
 proc secStmt(lay: Layout, n: Node) =
   case n.kind
@@ -993,7 +1013,25 @@ proc secStmt(lay: Layout, n: Node) =
   else:
     internalError(lay, errUnknownNode, n.kind)
 
+proc checkRecursiveAlias*(lay: Layout, sym: Symbol, n: Node) =
+  case n.kind
+  of NodeWithSons:
+    for m in n.sons:
+      lay.checkRecursiveAlias(sym, m)
+  of nkIdent:
+    if sym.name.id == n.ident.id:
+      let prev = lay.context.toString(sym.lineInfo)
+      lay.sourceError(errRecursiveAlias, n, sym.name, prev)
+    else:
+      let alias = lay.aliasTbl.getOrDefault(n.ident)
+      if not alias.isNil:
+        lay.checkRecursiveAlias(sym, alias.sym.alias)
+  else: discard
+
 proc secTopLevel*(lay: Layout, n: Node) =
+  for s in values(lay.aliasTbl):
+    lay.checkRecursiveAlias(s.sym, s.sym.alias)
+
   ensure(n.kind == nkStmtList)
   for son in n.sons:
     lay.secStmt(son)
@@ -1001,6 +1039,10 @@ proc secTopLevel*(lay: Layout, n: Node) =
   for s in values(lay.classTbl):
     if sfUsed notin s.sym.flags:
       lay.sourceWarning(warnClassNotUsed, s, s.sym.name)
+
+  for s in values(lay.aliasTbl):
+    if sfUsed notin s.sym.flags:
+      lay.sourceWarning(warnAliasNotUsed, s, s.sym.name)
 
 proc luaBinding(lay: Layout) =
   var L = lay.context.getLua()
