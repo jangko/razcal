@@ -485,13 +485,30 @@ proc parseAnimList(p: var Parser): Node =
   let body = parseAnimBody(p)
   result = newNodeP(p, nkAnimList, name, duration, body)
 
+proc parseAlias(p: var Parser): Node =
+  if p.tok.kind != tkIdent:
+    p.error(errIdentExpected)
+  let name = newIdentNodeP(p)
+
+  p.getTok()
+  eat(p, tkEquals)
+
+  let aliasValue = p.parseExpr(-1)
+  result = newNodeP(p, nkAlias, name, aliasValue)
+
+proc parseAliasList(p: var Parser): Node =
+  p.getTok() # skip tkAlias
+  result = newNodeP(p, nkAliasList)
+  withInd(p):
+    while sameInd(p):
+      addSon(result, parseAlias(p))
+
 proc parseTopLevel(p: var Parser): Node =
   case p.tok.kind
   of tkIdent: result = parseView(p)
   of tkColonColon: result = parseClass(p)
-  of tkPercent:
-    result = parseAnimList(p)
-    echo result.treeRepr
+  of tkPercent: result = parseAnimList(p)
+  of tkAlias: result = parseAliasList(p)
   else:
     p.error(errInvalidToken, p.tok.kind)
 

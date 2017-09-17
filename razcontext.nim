@@ -76,6 +76,7 @@ type
     errUnknownNode
     errDuplicateView
     errDuplicateClass
+    errDuplicateAlias
     errDuplicateParam
     errClassNotFound
     errParamCountNotMatch
@@ -145,6 +146,7 @@ const
     errUnknownNode: "unknown node $1",
     errDuplicateView: "duplicate view not allowed: `$1`, the other one is here: $2",
     errDuplicateClass: "duplicate class not allowed: `$1`, the other one is here: $2",
+    errDuplicateAlias: "duplicate alias not allowed: `$1`, the other one is here: $2",
     errDuplicateParam: "duplicate param name: `$1`",
     errClassNotFound: "class `$1` not found",
     errParamCountNotMatch: "expected $1 param(s) but got $2 param(s)",

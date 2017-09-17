@@ -6,8 +6,9 @@ type
     root: View                   # every layout/scene root
     viewTbl: Table[View, Node]   # view to SymbolNode.skView
     classTbl: Table[Ident, Node] # string to SymbolNode.skClass
+    aliasTbl: Table[Ident, Node]
     solver: kiwi.Solver          # constraint solver
-    context: RazContext             # ref to app global context
+    context: RazContext          # ref to app global context
     lastView: View               # last processed parent view/current View
     emptyNode: Node
 
@@ -47,6 +48,7 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.id = id
   result.viewTbl = initTable[View, Node]()
   result.classTbl = initTable[Ident, Node]()
+  result.aliasTbl = initTable[Ident, Node]()
   result.solver = newSolver()
   result.context = context
   result.emptyNode = newNode(nkEmpty)
@@ -270,6 +272,19 @@ proc semClass(lay: Layout, n: Node) =
   if cls.paramTable.len > 0:
     lay.substituteParams(n[2], cls) # n[2] = classBody
 
+proc semAliasList(lay: Layout, n: Node) =
+  for m in n.sons:
+    ensure(m.kind == nkAlias)
+    ensure(m.len == 2)
+    ensure(m[0].kind == nkIdent)
+    let alias = lay.aliasTbl.getOrDefault(m[0].ident)
+    if alias.isNil:
+      lay.aliasTbl[m[0].ident] = m
+    else:
+      let info = alias[0].lineInfo
+      let prev = lay.context.toString(info)
+      lay.sourceError(errDuplicateAlias, m[0], alias[0].ident, prev)
+
 proc semAnimList(lay: Layout, n: Node) =
   discard
 
@@ -278,6 +293,7 @@ proc semStmt(lay: Layout, n: Node) =
   of nkView: lay.semView(n)
   of nkClass: lay.semClass(n)
   of nkAnimList: lay.semAnimList(n)
+  of nkAliasList: lay.semAliasList(n)
   else:
     internalError(lay, errUnknownNode, n.kind)
 
@@ -329,7 +345,11 @@ proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
       result = params[n.sym.pos]
     else:
       result = n.sym.value
-  of nkIdent, nkUInt, nkString:
+  of nkIdent:
+    let alias = lay.aliasTbl.getOrDefault(n.ident)
+    if alias.isNil: result = n
+    else: result = alias[1]
+  of nkUInt, nkString:
     result = n
   else:
     internalError(lay, errUnknownNode, n.kind)
@@ -346,6 +366,18 @@ proc instantiateClass(lay: Layout, cls: ClassContext, params: Node): Node =
   lay.secViewbody(n)
   result = n
 
+proc instantiateArg(lay: Layout, n: Node): Node =
+  case n.kind
+  of NodeWithSons:
+    for i in 0.. <n.len:
+      n[i] = lay.instantiateArg(n[i])
+    result = n
+  of nkIdent:
+    let alias = lay.aliasTbl.getOrDefault(n.ident)
+    if alias.isNil: result = n
+    else: result = alias[1]
+  else: result = n
+
 proc secViewClass(lay: Layout, n: Node) =
   # the view have classes
   ensure(n.kind in {nkViewClassList, nkEmpty})
@@ -353,7 +385,7 @@ proc secViewClass(lay: Layout, n: Node) =
     ensure(vc.kind == nkViewClass)
     ensure(vc.len == 2)
     let name = vc.sons[0]
-    let params = vc.sons[1]
+    let params = lay.instantiateArg(vc.sons[1])
     ensure(name.kind == nkIdent)
     let classSymbol = lay.classTbl.getOrDefault(name.ident)
     if classSymbol.isNil:
@@ -473,7 +505,11 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
         result = newNodeI(nkFlexVar, n.lineInfo)
         result.variable = lay.selectViewProp(lay.lastView, id)
       else:
-        lay.sourceError(errUndefinedVar, n, n.ident)
+        let alias = lay.aliasTbl.getOrDefault(n.ident)
+        if alias.isNil:
+          lay.sourceError(errUndefinedVar, n, n.ident)
+        else:
+          result = lay.resolveTerm(alias[1], lastIdent, choiceMode)
     else:
       let view = lay.findRelation(n, id)
       if view.isNil:
@@ -727,7 +763,11 @@ proc secFlexExpr(lay: Layout, n: Node, choiceMode = false): Node =
       result = newNodeI(nkFlexVar, n.lineInfo)
       result.variable = lay.selectViewProp(lay.lastView, id)
     else:
-      lay.sourceError(errUndefinedVar, n, n.ident)
+      let alias = lay.aliasTbl.getOrDefault(n.ident)
+      if alias.isNil:
+        lay.sourceError(errUndefinedVar, n, n.ident)
+      else:
+        result = lay.secFlexExpr(alias[1], choiceMode)
   of nkUint:
     result = n
   of nkDotCall:
@@ -949,6 +989,7 @@ proc secStmt(lay: Layout, n: Node) =
   of nkView: lay.secView(n)
   of nkClass: lay.secClass(n)
   of nkAnimList: lay.secAnimList(n)
+  of nkAliasList: discard # already done
   else:
     internalError(lay, errUnknownNode, n.kind)
 
@@ -1053,7 +1094,7 @@ proc semCheck*(lay: Layout, n: Node) =
     echo "onClick not found"
   else:
     var proxy = L.getUD(lay.root) # push first argument
-    assert(proxy == lay.root)
+    ensure(proxy == lay.root)
     if L.pcall(1, 0, 0) != 0:
       let errorMsg = L.toString(-1)
       L.pop(1)

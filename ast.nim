@@ -50,6 +50,7 @@ type
     # x.sons[1..n]
     nkStmtList, nkClassParams, nkViewClassList
     nkEventList, nkPropList, nkFlexList, nkAnimList
+    nkAliasList
 
     # constraint's related node
     nkChoice       # a list of exprs, excluding '|' operator
@@ -73,6 +74,9 @@ type
 
     # view classes startAni endAni interpolator
     nkAnim
+
+    # name expr
+    nkAlias
 
   Node* = ref NodeObj
   NodeObj* {.acyclic.} = object
