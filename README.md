@@ -70,12 +70,12 @@ documentation none, tutorial none.
     * ~instantiation with or without default argument~
     * ~semcheck~
   * animation instantiation:
-    * two sets of variables: origin and destination
-      * collect who participated in animation
-    * two sets of constraint and solver
-      * constraints can be contained in class
-    * a temporary set of variable during transition returned from interpolator
-      * predefined or user defined interpolator
+    * ~two sets of variables: origin and destination~
+      * ~collect who participated in animation~
+    * ~two sets of constraint and solver~
+      * ~constraints can be contained in class~
+    * ~a temporary set of variable during transition returned from interpolator~
+      * ~predefined or user defined interpolator~
     * after animation ended: discard origin, put destination to origin
     * animation clock
   * applying functional constraint

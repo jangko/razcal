@@ -12,7 +12,7 @@
 
 ::commonHeader
   @ top = parent.top; height = parent.height
-  
+
 ::yearBody(spc)
   @ right, left = _next.left - spc, _prev.right + spc
   
@@ -21,10 +21,10 @@ year
     top >= 0; height = 60
     left, right = months.left, months.right
     top - parent.top = parent.bottom - months.bottom
-    
+
 alias
-  space = 50
-  
+  space = 10
+
 year._prev::commonHeader
   @ left, width = parent.left, 60
 
@@ -32,13 +32,13 @@ year._next::commonHeader
   @ right, width = parent.right, 60
 
 year.year::commonHeader::yearBody(space)
-  
+
 months
   flex
     right, bottom = child[3].right, child[].bottom
     left - parent.left = parent.right - right
     top = year.bottom + 10
-  
+
 months._1::firstRow(space)::common
 months._2::firstRow(space)::common
 months._3::firstRow(space)::common
@@ -54,9 +54,25 @@ months._10::thirdRow(space)::common
 months._11::thirdRow(space)::common
 months._12::thirdRow(space)::common
 
+alias
+  relax = 50
+
 % anim1 6.0
-  months._1::button(a, b, c)::header(a, b, c) 10 10.0 linear
-  months._2::button(a, b, c)::header(a, b, c) 10 10.0
-  months._3::button(a, b, c)::header(a, b, c) 10
-  months._4::button(a, b, c) @10
-  months._5 @10 tween
+  year._prev::commonHeader
+  year._next::commonHeader
+  year.year::commonHeader::yearBody(relax)
+  year
+  months
+  months._1::firstRow(relax)::common @1.0 linear
+  months._2::firstRow(relax)::common @1.0
+  months._3::firstRow(relax)::common 0.5 1.0
+  months._4::firstRow(relax)::common 0.5 1.0
+  months._5::secondRow(relax)::common 0.3 1.0 tween
+  months._5::secondRow(relax)::common
+  months._6::secondRow(relax)::common
+  months._7::secondRow(relax)::common
+  months._8::secondRow(relax)::common
+  months._9::thirdRow(relax)::common
+  months._10::thirdRow(relax)::common
+  months._11::thirdRow(relax)::common
+  months._12::thirdRow(relax)::common linear

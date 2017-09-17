@@ -1,5 +1,5 @@
 import os, glfw, nvg, nimLUA, opengl, parser, razcontext, semcheck
-import streams
+import streams, ast, layout, idents
 
 proc load_glex() {.importc, cdecl.}
 proc nvgTextBounds*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =
@@ -147,7 +147,7 @@ proc bindNVG(LX: PState, nvg: NVGcontext) =
   LX.pushCfunction(nvgProxy)
   LX.setGlobal("getNVG")
 
-proc loadMainScript(ctx: RazContext) =
+proc loadMainScript(ctx: RazContext): Layout =
   let fileName = if paramCount() == 0: "main.raz" else: paramStr(1)
   var input = newFileStream(fileName)
   var knownFile = false
@@ -161,6 +161,7 @@ proc loadMainScript(ctx: RazContext) =
 
     var lay = newLayout(0, ctx)
     lay.semCheck(root)
+    result = lay
   except SourceError as srcErr:
     ctx.printError(srcErr)
   except InternalError as ex:
@@ -203,10 +204,25 @@ proc loadFonts(nvg: NVGContext) =
   discard nvg.nvgAddFallbackFontId(sans, emoji)
   discard nvg.nvgAddFallbackFontId(bold, emoji)
 
+proc draw*(view: View, nvg: NVGContext) =
+  nvg.nvgBeginPath()
+  nvg.nvgRect(view.getLeft(), view.getTop(),
+    view.getWidth(), view.getHeight())
+
+  #echo "nam: ", view.name
+  #echo "lef: ", view.getLeft()
+  #echo "top: ", view.getTop()
+  #echo "rig: ", view.getRight()
+  #echo "bot: ", view.getBottom()
+  nvg.nvgStroke(1.0, 0.0, 0.0, 1.0, 2.0)
+  for child in view.children:
+    child.draw(nvg)
+
 proc main =
   var ctx = openRazContext()
   var L = ctx.getLua()
-  ctx.loadMainScript()
+  let lay = ctx.loadMainScript()
+  if lay == nil: return
 
   glfw.init()
   var w = newGlWin(nMultiSamples = 4)
@@ -222,13 +238,13 @@ proc main =
   nvg.loadFonts()
   L.bindNVG(nvg)
 
-  try:
-    ctx.executeLua("main.lua")
-  except OtherError as ex:
-    echo ex.msg
-  except Exception as ex:
-    echo "unknown error: ", ex.msg
-    writeStackTrace()
+  #try:
+  #  ctx.executeLua("main.lua")
+  #except OtherError as ex:
+  #  echo ex.msg
+  #except Exception as ex:
+  #  echo "unknown error: ", ex.msg
+  #  writeStackTrace()
 
   while not w.shouldClose():
     let s = w.framebufSize()
@@ -249,15 +265,17 @@ proc main =
     let stroke_width = 10.0
     nvg.nvgStroke(0.0, 0.5, 1.0, 1.0, stroke_width)
 
+    lay.root.draw(nvg)
+
     nvg.nvgEndFrame()
 
-    try:
-      ctx.callF("updateScene")
-    except OtherError as ex:
-      echo ex.msg
-    except Exception as ex:
-      echo "unknown error: ", ex.msg
-      writeStackTrace()
+    #try:
+    #  ctx.callF("updateScene")
+    #except OtherError as ex:
+    #  echo ex.msg
+    #except Exception as ex:
+    #  echo "unknown error: ", ex.msg
+    #  writeStackTrace()
 
     w.swapBufs()
     waitEvents()

@@ -106,6 +106,7 @@ type
     errUnknownEvent
     errUnbalancedArm
     errUnsatisfiableConstraint
+    errUndefinedView
 
     # other's errors
     errCannotOpenFile
@@ -179,6 +180,7 @@ const
     errUnknownEvent: "`$1` is an unknown view event",
     errUnbalancedArm: "left and right arm is not balanced here",
     errUnsatisfiableConstraint: "unsatisfiable constraint",
+    errUndefinedView: "`$1` is an undefined view",
 
     # other errors
     errCannotOpenFile: "cannot open file: $1",

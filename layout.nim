@@ -1,6 +1,6 @@
 import kiwi, tables, idents, ast
 
-proc newView*(name: Ident): View =
+proc newVarSet*(name: Ident): VarSet =
   new(result)
   result.top = newVariable(name.s & ".top")
   result.left = newVariable(name.s & ".left")
@@ -10,6 +10,12 @@ proc newView*(name: Ident): View =
   result.height = newVariable(name.s & ".height")
   result.centerX = newVariable(name.s & ".centerX")
   result.centerY = newVariable(name.s & ".centerY")
+
+proc newView*(name: Ident): View =
+  new(result)
+  result.origin = newVarSet(name)
+  result.destination = newVarSet(name)
+  result.current = result.origin
   result.parent = nil
   result.views = initTable[Ident, View]()
   result.name = name
@@ -24,13 +30,27 @@ proc newView*(parent: View, name: Ident): View =
   parent.children.add result
   result.parent = parent
 
+proc setConstraint(self: VarSet, solver: Solver) =
+  solver.addConstraint(self.right == self.left + self.width)
+  solver.addConstraint(self.bottom == self.top + self.height)
+  solver.addConstraint(self.right >= self.left)
+  solver.addConstraint(self.bottom >= self.top)
+  solver.addConstraint(self.centerX == (self.right - self.left) / 2)
+  solver.addConstraint(self.centerY == (self.bottom - self.top) / 2)
+
 proc setBasicConstraint*(solver: Solver, view: View) =
-  solver.addConstraint(view.right == view.left + view.width)
-  solver.addConstraint(view.bottom == view.top + view.height)
-  solver.addConstraint(view.right >= view.left)
-  solver.addConstraint(view.bottom >= view.top)
-  solver.addConstraint(view.centerX == (view.right - view.left) / 2)
-  solver.addConstraint(view.centerY == (view.bottom - view.top) / 2)
+  view.origin.setConstraint(solver)
+
+proc setConstraint*(view: View, solver: Solver) =
+  view.current = view.destination
+  view.destination.setConstraint(solver)
+  for child in view.children:
+    child.setConstraint(solver)
+    
+proc setOrigin*(view: View) =
+  view.current = view.origin  
+  for child in view.children:
+    child.setOrigin()
 
 proc getChildren*(view: View): seq[View] =
   view.children
@@ -39,28 +59,28 @@ template getName*(view: View): string =
   view.name.s
 
 template getTop*(view: View): float64 =
-  view.top.value
+  view.current.top.value
 
 template getLeft*(view: View): float64 =
-  view.left.value
+  view.current.left.value
 
 template getRight*(view: View): float64 =
-  view.right.value
+  view.current.right.value
 
 template getBottom*(view: View): float64 =
-  view.bottom.value
+  view.current.bottom.value
 
 template getWidth*(view: View): float64 =
-  view.width.value
+  view.current.width.value
 
 template getHeight*(view: View): float64 =
-  view.height.value
+  view.current.height.value
 
 template getCenterX*(view: View): float64 =
-  view.centerX.value
+  view.current.centerX.value
 
 template getCenterY*(view: View): float64 =
-  view.centerY.value
+  view.current.centerY.value
 
 template getParent*(view: View): View =
   view.parent
@@ -99,4 +119,4 @@ proc findChild*(view: View, id: Ident): View =
 proc newAnimation*(duration: float64): Animation =
   new(result)
   result.duration = duration
-
+  result.anims = @[]

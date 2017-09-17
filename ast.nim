@@ -6,20 +6,35 @@ type
     symbols*: HashSet[Symbol]
     parent*: Scope
 
-  View* = ref object
+  VarSet* = ref object
     top*, left*, right*, bottom*: kiwi.Variable
     width*, height*: kiwi.Variable
     centerX*, centerY*: kiwi.Variable
+
+  View* = ref object
+    origin*: VarSet
+    destination*: VarSet
+    current*: VarSet
     views*: Table[Ident, View]  # map string to children view
     children*: seq[View]        # children view
     parent*: View               # nil if no parent/root
     name*: Ident                # view's name
     idx*: int                   # index into children position/-1 if invalid
     symNode*: Node
-    node*: Node
+    body*: Node
+
+  Anim* = ref object
+    view*: View
+    interpolator*: Ident
+    startAni*: float64
+    endAni*: float64
+    current*: VarSet
+    destination*: VarSet
 
   Animation* = ref object of IDobj
     duration*: float64
+    anims*: seq[Anim]
+    solver*: kiwi.Solver
 
   ClassContext* = ref object
     paramTable*: Table[Ident, Node] # map param name to SymbolNode

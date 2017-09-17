@@ -2,12 +2,17 @@ import ast, layout, idents, kiwi, tables, razcontext, hashes, strutils
 import nimLUA, keywords
 
 type
+  Interpolator = proc(): int
+
   Layout* = ref object of IDobj
-    root: View                   # every layout/scene root
+    root*: View                   # every layout/scene root
     classTbl: Table[Ident, Node] # string to SymbolNode.skClass
     aliasTbl: Table[Ident, Node]
     animTbl: Table[Ident, Node]
+    interpolator: Table[Ident, Interpolator]
     solver: kiwi.Solver          # constraint solver
+    origin: kiwi.Solver
+    destination: kiwi.Solver
     context: RazContext          # ref to app global context
     lastView: View               # last processed parent view/current View
     emptyNode: Node
@@ -37,7 +42,6 @@ proc createView(lay: Layout, n: Node): Node =
   result   = newViewSymbol(n, view).newSymbolNode()
   lay.lastView = view
   view.symNode = result
-  view.node = n
   lay.solver.setBasicConstraint(view)
 
 # one application can have multiple layout a.k.a 'page'
@@ -48,6 +52,8 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.aliasTbl = initTable[Ident, Node]()
   result.animTbl = initTable[Ident, Node]()
   result.solver = newSolver()
+  result.origin = result.solver
+  result.destination = newSolver()
   result.context = context
   result.emptyNode = newNode(nkEmpty)
 
@@ -55,7 +61,7 @@ proc newLayout*(id: int, context: RazContext): Layout =
   let n = newIdentNode(root)
   result.root = newView(root)
   result.root.symNode = newViewSymbol(n, result.root).newSymbolNode()
-  result.root.node = n
+  result.root.body = result.emptyNode
   result.solver.setBasicConstraint(result.root)
 
 proc getRoot(lay: Layout): View =
@@ -189,6 +195,7 @@ proc semView(lay: Layout, n: Node) =
     let son = n[0].sons[1]
     if son.kind == nkIdent: lastIdent = son
   n[0] = lay.semViewName(n[0], lastIdent)
+  n[0].sym.view.body = n[2] #we only need body for next phase
 
   # at this point, the view already created
   # and n[0] already replaced with a symbolNode
@@ -405,14 +412,14 @@ proc secViewClass(lay: Layout, n: Node) =
 
 proc selectViewProp(lay: Layout, view: View, id: SpecialWords): Variable =
   case id
-  of wLeft: result = view.left
-  of wRight: result = view.right
-  of wTop: result = view.top
-  of wBottom: result = view.bottom
-  of wWidth: result = view.width
-  of wHeight: result = view.height
-  of wCenterX: result = view.centerX
-  of wCenterY: result = view.centerY
+  of wLeft: result = view.current.left
+  of wRight: result = view.current.right
+  of wTop: result = view.current.top
+  of wBottom: result = view.current.bottom
+  of wWidth: result = view.current.width
+  of wHeight: result = view.current.height
+  of wCenterX: result = view.current.centerX
+  of wCenterY: result = view.current.centerY
   else:
     internalError(lay, errUnknownProp, id)
 
@@ -981,10 +988,61 @@ proc secView(lay: Layout, n: Node) =
   ensure(n[0].sym.kind == skView)
   lay.lastView = n[0].sym.view
   lay.secViewClass(n[1])
-  lay.secViewBody(n[2])
+  let body = n[2].copyTree
+  lay.secViewBody(body)
 
 proc secClass(lay: Layout, n: Node) =
   discard
+
+proc resolveView(lay: Layout, n: Node, parent: View): Node =
+  case n.kind
+  of nkIdent:
+    let view = parent.views.getOrDefault(n.ident)
+    if view.isNil:
+      lay.sourceError(errUndefinedView, n, n.ident)
+    else:
+      result = view.symNode
+  of nkDotCall:
+    ensure(n.len == 2)
+    n[0] = lay.resolveView(n[0], parent)
+    ensure(n[0].kind == nkSymbol)
+    n[1] = lay.resolveView(n[1], n[0].sym.view)
+    result = n[1]
+  else:
+    internalError(lay, errUnknownNode, n.kind)
+
+proc processAnim(lay: Layout, n: Node, ani: Animation) =
+  for m in n.sons:
+    ensure(m.kind == nkAnim)
+    let symNode = lay.resolveView(m[0], lay.root)
+    let view = symNode.sym.view
+    lay.lastView = view
+    let body = view.body.copyTree
+    lay.secViewBody(body)
+    lay.secViewClass(m[1])
+    var startAni, endAni: float64
+
+    if m[2].kind == nkEmpty and m[3].kind != nkEmpty:
+      startAni = 0.0
+      endAni = m[3].toNumber()
+      if endAni > 1.0: endAni = 1.0
+      if endAni <= 0.0: endAni = 0.01
+    elif m[2].kind != nkEmpty and m[3].kind == nkEmpty:
+      endAni = 1.0
+      startAni = m[2].toNumber()
+      if startAni < 0.0: startAni = 0.0
+      if startAni >= 1.0: startAni = 0.99
+    else:
+      startAni = m[2].toNumber()
+      endAni = m[3].toNumber()
+      if startAni < 0.0: startAni = 0.0
+      if startAni >= 1.0: startAni = 0.99
+      if endAni < startAni: endAni = startAni + 0.01
+      if endAni > 1.0: endAni = 1.0
+
+    let interpolator = if m[4].kind == nkIdent: m[4].ident else: lay.getIdent("linear")
+    let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, endAni: endAni)
+    ani.anims.add(anim)
 
 proc secAnimList(lay: Layout, n: Node) =
   ensure(n.len == 3)
@@ -996,20 +1054,24 @@ proc secAnimList(lay: Layout, n: Node) =
     let ani = newAnimation(duration)
     let sym = newAnimationSymbol(n[0], ani).newSymbolNode()
     lay.animTbl[name] = sym
+    lay.processAnim(n[2], ani)
   else:
     let prev = lay.context.toString(anim.lineInfo)
     lay.sourceError(errDuplicateAnim, n[0], name, prev)
 
-  let body = n[2]
-  for m in body.sons:
-    ensure(m.kind == nkAnim)
-
-proc secStmt(lay: Layout, n: Node) =
+proc secViewAndClass(lay: Layout, n: Node) =
   case n.kind
   of nkView: lay.secView(n)
   of nkClass: lay.secClass(n)
-  of nkAnimList: lay.secAnimList(n)
+  of nkAnimList: discard
   of nkAliasList: discard # already done
+  else:
+    internalError(lay, errUnknownNode, n.kind)
+
+proc secAnimation(lay: Layout, n: Node) =
+  case n.kind
+  of nkView, nkClass, nkAliasList: discard
+  of nkAnimList: lay.secAnimList(n)
   else:
     internalError(lay, errUnknownNode, n.kind)
 
@@ -1034,7 +1096,14 @@ proc secTopLevel*(lay: Layout, n: Node) =
 
   ensure(n.kind == nkStmtList)
   for son in n.sons:
-    lay.secStmt(son)
+    lay.secViewAndClass(son)
+
+  lay.solver = lay.destination
+  lay.root.setConstraint(lay.solver)
+  for son in n.sons:
+    lay.secAnimation(son)
+
+  #lay.root.setOrigin()
 
   for s in values(lay.classTbl):
     if sfUsed notin s.sym.flags:
@@ -1105,10 +1174,15 @@ proc luaBinding(lay: Layout) =
 proc semCheck*(lay: Layout, n: Node) =
   lay.luaBinding()
 
-  lay.solver.addConstraint(lay.root.top == 0)
-  lay.solver.addConstraint(lay.root.left == 0)
-  lay.solver.addConstraint(lay.root.width == 640)
-  lay.solver.addConstraint(lay.root.height == 480)
+  lay.origin.addConstraint(lay.root.origin.top == 0)
+  lay.origin.addConstraint(lay.root.origin.left == 0)
+  lay.origin.addConstraint(lay.root.origin.width == 640)
+  lay.origin.addConstraint(lay.root.origin.height == 480)
+
+  lay.destination.addConstraint(lay.root.destination.top == 0)
+  lay.destination.addConstraint(lay.root.destination.left == 0)
+  lay.destination.addConstraint(lay.root.destination.width == 640)
+  lay.destination.addConstraint(lay.root.destination.height == 480)
 
   # semcheck first pass
   # collecting symbols
@@ -1126,7 +1200,8 @@ proc semCheck*(lay: Layout, n: Node) =
   # attaching event handler to view
   lay.secTopLevel(n)
 
-  lay.solver.updateVariables()
+  lay.origin.updateVariables()
+  lay.destination.updateVariables()
 
   #[var L = lay.context.getLua()
   L.getGlobal("View")     # get View table
