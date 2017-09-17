@@ -55,6 +55,9 @@ documentation none, tutorial none.
 
 * parser
   * ~parse comma separated constraint~
+  * parse animation description
+    * tkPercent(%) tkIdent(name) tkNumber(duration)
+    * tkIdent(interpolator) tkNumber(start_ani) tkNumber(end_ani) widget(::class)*
   * parse functional constraint
   * parse style section
   * parse prop section
@@ -66,6 +69,15 @@ documentation none, tutorial none.
     * ~class copying~
     * ~instantiation with or without default argument~
     * ~semcheck~
+  * animation instantiation:
+    * two sets of variables: origin and destination
+      * collect who participated in animation
+    * two sets of constraint and solver
+      * constraints can be contained in class
+    * a temporary set of variable during transition returned from interpolator
+      * predefined or user defined interpolator
+    * after animation ended: discard origin, put destination to origin
+    * animation clock
   * applying functional constraint
   * applying prop to view
   * applying style to view
@@ -84,6 +96,8 @@ documentation none, tutorial none.
 * test suite
   * robust test suite for both Nim and Lua side
   * automated build system + test
+  * documentation
+  * tutorial
 
 The first screenshot ever:
 

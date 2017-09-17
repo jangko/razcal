@@ -3,20 +3,24 @@ type
     wInvalid
 
     # arithmetic operators
+    #must be keep in sync with flexBinaryTermOp
     wPlus, wMinus, wMul, wDiv
 
     # operator
     wDot, wDotDot, wColon, wColonColon      # this two section
     wBang, wChoice, wAt                     # must match with
+    # must be keep in sync with flexOpr
     wEquals, wGreaterOrEqual, wLessOrEqual  # TokenKind's order
     # keyword                               # to ensure proper
     wProgram, wStyle, wAlias                # token generated
     wEvent, wProp, wFlex
 
     # constraint relative
+    # must be keep in sync with flexRel
     wThis, wRoot, wParent, wChild, wPrev, wNext
 
     # view's basic constraint field
+    # must be keep in sync with flexProp
     wLeft, wRight, wTop, wBottom
     wWidth, wHeight, wCenterX, wCenterY
 
