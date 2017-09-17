@@ -427,14 +427,71 @@ proc parseClass(p: var Parser): Node =
   let body = parseViewBody(p)
   result = newNodeP(p, nkClass, name, params, body)
 
-proc parseStyle(p: var Parser): Node =
+proc parseTime(p: var Parser): Node =
+  case p.tok.kind
+  of tkNumber: result = newUIntNodeP(p)
+  of tkFloat: result = newFloatNodeP(p)
+  else:
+    p.error(errTokenExpected, "number")
   p.getTok()
+
+proc parseAnim(p: var Parser): Node =
+  let
+    name    = parseName(p)
+    classes = parseViewClassList(p)
+
+  var
+    startAni = p.emptyNode
+    endAni = p.emptyNode
+  if p.tok.kind == tkAt:
+    startAni = p.emptyNode
+    p.getTok()
+    endAni = parseTime(p)
+  elif p.tok.kind in {tkNumber, tkFloat}:
+    startAni = parseTime(p)
+    if p.tok.kind in {tkNumber, tkFloat}:
+      endAni = parseTime(p)
+
+  var interpolator = p.emptyNode
+  if p.tok.kind == tkIdent and p.tok.indent < 0:
+    interpolator = newIdentNodeP(p)
+    p.getTok()
+
+  result = newNodeP(p, nkAnim, name, classes, startAni, endAni, interpolator)
+
+proc parseAnimBody(p: var Parser): Node =
+  if p.tok.indent <= p.currInd:
+    return p.emptyNode
+
+  result = newNodeP(p, nkStmtList)
+  withInd(p):
+    while sameInd(p):
+      case p.tok.kind
+      of tkIdent:
+        let anim = parseAnim(p)
+        addSon(result, anim)
+      of tkEof:
+        break
+      else: p.error(errInvalidToken, p.tok.kind)
+
+proc parseAnimList(p: var Parser): Node =
+  p.getTok()
+  if p.tok.kind != tkIdent:
+    p.error(errIdentExpected)
+
+  let name = newIdentNodeP(p)
+  p.getTok()
+  let duration = parseTime(p)
+  let body = parseAnimBody(p)
+  result = newNodeP(p, nkAnimList, name, duration, body)
 
 proc parseTopLevel(p: var Parser): Node =
   case p.tok.kind
   of tkIdent: result = parseView(p)
   of tkColonColon: result = parseClass(p)
-  of tkStyle: result = parseStyle(p)
+  of tkPercent:
+    result = parseAnimList(p)
+    echo result.treeRepr
   else:
     p.error(errInvalidToken, p.tok.kind)
 

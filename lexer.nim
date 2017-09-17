@@ -18,7 +18,7 @@ type
     # tkDot..tkProp must be keep in sync with
     # keywords.SpecialWords
     tkDot, tkDotDot, tkColon, tkColonColon
-    tkBang, tkChoice, tkAt
+    tkBang, tkChoice, tkPercent, tkAt
     tkEquals, tkGreaterOrEqual, tkLessOrEqual, tkOpr
 
     tkProgram, tkStyle, tkAlias, tkFlex, tkEvent, tkProp
@@ -48,7 +48,7 @@ const
     "tkInvalid", "[EOF]", "tkComment", "tkNestedComment",
     "tkIdent", "tkNumber", "tkFloat", "tkString", "tkCharLit",
     ";", "`", ",", "(", ")", "{", "}", "[", "]",
-    ".", "..", ":", "::", "!", "|", "@", "=", ">=", "<=", "tkOpr",
+    ".", "..", ":", "::", "!", "|", "%", "@", "=", ">=", "<=", "tkOpr",
     "program", "style", "alias", "flex", "event", "prop"]
 
 const

@@ -270,10 +270,14 @@ proc semClass(lay: Layout, n: Node) =
   if cls.paramTable.len > 0:
     lay.substituteParams(n[2], cls) # n[2] = classBody
 
+proc semAnimList(lay: Layout, n: Node) =
+  discard
+
 proc semStmt(lay: Layout, n: Node) =
   case n.kind
   of nkView: lay.semView(n)
   of nkClass: lay.semClass(n)
+  of nkAnimList: lay.semAnimList(n)
   else:
     internalError(lay, errUnknownNode, n.kind)
 
@@ -937,10 +941,14 @@ proc secView(lay: Layout, n: Node) =
 proc secClass(lay: Layout, n: Node) =
   discard
 
+proc secAnimList(lay: Layout, n: Node) =
+  discard
+
 proc secStmt(lay: Layout, n: Node) =
   case n.kind
   of nkView: lay.secView(n)
   of nkClass: lay.secClass(n)
+  of nkAnimList: lay.secAnimList(n)
   else:
     internalError(lay, errUnknownNode, n.kind)
 

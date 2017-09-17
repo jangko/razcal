@@ -56,8 +56,8 @@ documentation none, tutorial none.
 * parser
   * ~parse comma separated constraint~
   * parse animation description
-    * tkPercent(%) tkIdent(name) tkNumber(duration)
-    * tkIdent(interpolator) tkNumber(start_ani) tkNumber(end_ani) widget(::class)*
+    * ~tkPercent(%) tkIdent(name) tkNumber(duration)~
+    * ~widget(::class)* tkNumber(start_ani) tkNumber(end_ani) tkIdent(interpolator)~
   * parse functional constraint
   * parse style section
   * parse prop section

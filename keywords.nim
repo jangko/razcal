@@ -8,7 +8,7 @@ type
 
     # operator
     wDot, wDotDot, wColon, wColonColon      # this two section
-    wBang, wChoice, wAt                     # must match with
+    wBang, wChoice, wPercent, wAt           # must match with
     # must be keep in sync with flexOpr
     wEquals, wGreaterOrEqual, wLessOrEqual  # TokenKind's order
     # keyword                               # to ensure proper
@@ -52,7 +52,7 @@ const
   specialWords* = [
     "+", "-", "*", "/",
     ".", "..", ":", "::",
-    "!", "|", "@",
+    "!", "|", "%", "@",
     "=", ">=", "<=",
 
     "program", "style", "alias",
