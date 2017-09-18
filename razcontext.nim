@@ -107,6 +107,7 @@ type
     errUnbalancedArm
     errUnsatisfiableConstraint
     errUndefinedView
+    errNeedToParticipate
 
     # other's errors
     errCannotOpenFile
@@ -181,6 +182,7 @@ const
     errUnbalancedArm: "left and right arm is not balanced here",
     errUnsatisfiableConstraint: "unsatisfiable constraint",
     errUndefinedView: "`$1` is an undefined view",
+    errNeedToParticipate: "`$1` need to participate in `$2` animation",
 
     # other errors
     errCannotOpenFile: "cannot open file: $1",

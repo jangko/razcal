@@ -1,4 +1,4 @@
-import sets, idents, strutils, razcontext, kiwi, tables
+import sets, idents, strutils, razcontext, kiwi, tables, sets
 
 type
   Scope* = ref object
@@ -13,7 +13,6 @@ type
 
   View* = ref object
     origin*: VarSet
-    destination*: VarSet
     current*: VarSet
     views*: Table[Ident, View]  # map string to children view
     children*: seq[View]        # children view
@@ -22,6 +21,7 @@ type
     idx*: int                   # index into children position/-1 if invalid
     symNode*: Node
     body*: Node
+    dependencies*: HashSet[View]
 
   Anim* = ref object
     view*: View

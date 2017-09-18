@@ -208,12 +208,6 @@ proc draw*(view: View, nvg: NVGContext) =
   nvg.nvgBeginPath()
   nvg.nvgRect(view.getLeft(), view.getTop(),
     view.getWidth(), view.getHeight())
-
-  #echo "nam: ", view.name
-  #echo "lef: ", view.getLeft()
-  #echo "top: ", view.getTop()
-  #echo "rig: ", view.getRight()
-  #echo "bot: ", view.getBottom()
   nvg.nvgStroke(1.0, 0.0, 0.0, 1.0, 2.0)
   for child in view.children:
     child.draw(nvg)

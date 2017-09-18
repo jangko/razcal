@@ -1,4 +1,4 @@
-import kiwi, tables, idents, ast
+import kiwi, tables, idents, ast, sets
 
 proc newVarSet*(name: Ident): VarSet =
   new(result)
@@ -14,13 +14,13 @@ proc newVarSet*(name: Ident): VarSet =
 proc newView*(name: Ident): View =
   new(result)
   result.origin = newVarSet(name)
-  result.destination = newVarSet(name)
   result.current = result.origin
   result.parent = nil
   result.views = initTable[Ident, View]()
   result.name = name
   result.children = @[]
   result.idx = -1
+  result.dependencies = initSet[View]()
 
 proc newView*(parent: View, name: Ident): View =
   assert(parent != nil)
@@ -30,7 +30,7 @@ proc newView*(parent: View, name: Ident): View =
   parent.children.add result
   result.parent = parent
 
-proc setConstraint(self: VarSet, solver: Solver) =
+proc setConstraint*(self: VarSet, solver: Solver) =
   solver.addConstraint(self.right == self.left + self.width)
   solver.addConstraint(self.bottom == self.top + self.height)
   solver.addConstraint(self.right >= self.left)
@@ -41,14 +41,8 @@ proc setConstraint(self: VarSet, solver: Solver) =
 proc setBasicConstraint*(solver: Solver, view: View) =
   view.origin.setConstraint(solver)
 
-proc setConstraint*(view: View, solver: Solver) =
-  view.current = view.destination
-  view.destination.setConstraint(solver)
-  for child in view.children:
-    child.setConstraint(solver)
-    
 proc setOrigin*(view: View) =
-  view.current = view.origin  
+  view.current = view.origin
   for child in view.children:
     child.setOrigin()
 
@@ -120,3 +114,4 @@ proc newAnimation*(duration: float64): Animation =
   new(result)
   result.duration = duration
   result.anims = @[]
+  result.solver = newSolver()

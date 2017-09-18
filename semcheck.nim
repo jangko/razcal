@@ -1,5 +1,5 @@
 import ast, layout, idents, kiwi, tables, razcontext, hashes, strutils
-import nimLUA, keywords
+import nimLUA, keywords, sets
 
 type
   Interpolator = proc(): int
@@ -12,10 +12,12 @@ type
     interpolator: Table[Ident, Interpolator]
     solver: kiwi.Solver          # constraint solver
     origin: kiwi.Solver
-    destination: kiwi.Solver
     context: RazContext          # ref to app global context
     lastView: View               # last processed parent view/current View
     emptyNode: Node
+
+proc hash*(view: View): Hash =
+  result = hash(cast[int](view))
 
 proc newInternalError(fileName: string, line: int, msg: string): InternalError =
   new(result)
@@ -53,7 +55,6 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.animTbl = initTable[Ident, Node]()
   result.solver = newSolver()
   result.origin = result.solver
-  result.destination = newSolver()
   result.context = context
   result.emptyNode = newNode(nkEmpty)
 
@@ -526,6 +527,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       if view.isNil:
         if choiceMode: return lay.emptyNode
         else: lay.sourceError(errRelationNotFound, n, n.ident, lay.lastView.name)
+      view.dependencies.incl(lay.lastView)
       result = view.symNode
   of nkDotCall:
     let tempView = lay.lastView
@@ -548,6 +550,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       if view.isNil:
         if choiceMode: return lay.emptyNode
         else: lay.sourceError(errWrongRelationIndex, n[1], idx)
+      view.dependencies.incl(lay.lastView)
       result = view.symNode
     else:
       lay.sourceError(errUndefinedRel, n[0], n[0].ident)
@@ -1011,15 +1014,34 @@ proc resolveView(lay: Layout, n: Node, parent: View): Node =
   else:
     internalError(lay, errUnknownNode, n.kind)
 
-proc processAnim(lay: Layout, n: Node, ani: Animation) =
+proc getName(lay: Layout, view: View): string =
+  result = $view.name
+  var v = view.parent
+  while v != lay.root and v != nil:
+    result = $v.name & "." & result
+    v = v.parent
+
+proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
+  lay.solver = ani.solver
+  var dependencies = initSet[View]()
+
+  let dest = newVarSet(lay.root.name)
+  dest.setConstraint(ani.solver)
+  lay.root.current = dest
+  ani.solver.addConstraint(dest.top == 0)
+  ani.solver.addConstraint(dest.left == 0)
+  ani.solver.addConstraint(dest.width == 640)
+  ani.solver.addConstraint(dest.height == 480)
+
   for m in n.sons:
     ensure(m.kind == nkAnim)
     let symNode = lay.resolveView(m[0], lay.root)
+    m[0] = symNode
     let view = symNode.sym.view
-    lay.lastView = view
-    let body = view.body.copyTree
-    lay.secViewBody(body)
-    lay.secViewClass(m[1])
+    let destination = newVarSet(view.name)
+    destination.setConstraint(ani.solver)
+    dependencies.incl(view.dependencies)
+    view.current = destination
     var startAni, endAni: float64
 
     if m[2].kind == nkEmpty and m[3].kind != nkEmpty:
@@ -1041,8 +1063,23 @@ proc processAnim(lay: Layout, n: Node, ani: Animation) =
       if endAni > 1.0: endAni = 1.0
 
     let interpolator = if m[4].kind == nkIdent: m[4].ident else: lay.getIdent("linear")
-    let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, endAni: endAni)
+    let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, endAni: endAni,
+      destination: destination, current: newVarSet(view.name))
     ani.anims.add(anim)
+
+  for m in n.sons:
+    let view = m[0].sym.view
+    lay.lastView = view
+    let body = view.body.copyTree
+    lay.secViewBody(body)
+    lay.secViewClass(m[1])
+    dependencies.excl(m[0].sym.view)
+
+  for v in dependencies:
+    lay.sourceError(errNeedToParticipate, aniNode, lay.getName(v), aniNode.ident)
+    break
+
+  ani.solver.updateVariables()
 
 proc secAnimList(lay: Layout, n: Node) =
   ensure(n.len == 3)
@@ -1054,7 +1091,7 @@ proc secAnimList(lay: Layout, n: Node) =
     let ani = newAnimation(duration)
     let sym = newAnimationSymbol(n[0], ani).newSymbolNode()
     lay.animTbl[name] = sym
-    lay.processAnim(n[2], ani)
+    lay.processAnim(n[0], n[2], ani)
   else:
     let prev = lay.context.toString(anim.lineInfo)
     lay.sourceError(errDuplicateAnim, n[0], name, prev)
@@ -1098,12 +1135,8 @@ proc secTopLevel*(lay: Layout, n: Node) =
   for son in n.sons:
     lay.secViewAndClass(son)
 
-  lay.solver = lay.destination
-  lay.root.setConstraint(lay.solver)
   for son in n.sons:
     lay.secAnimation(son)
-
-  #lay.root.setOrigin()
 
   for s in values(lay.classTbl):
     if sfUsed notin s.sym.flags:
@@ -1179,11 +1212,6 @@ proc semCheck*(lay: Layout, n: Node) =
   lay.origin.addConstraint(lay.root.origin.width == 640)
   lay.origin.addConstraint(lay.root.origin.height == 480)
 
-  lay.destination.addConstraint(lay.root.destination.top == 0)
-  lay.destination.addConstraint(lay.root.destination.left == 0)
-  lay.destination.addConstraint(lay.root.destination.width == 640)
-  lay.destination.addConstraint(lay.root.destination.height == 480)
-
   # semcheck first pass
   # collecting symbols
   # resolve view hierarchy
@@ -1201,7 +1229,6 @@ proc semCheck*(lay: Layout, n: Node) =
   lay.secTopLevel(n)
 
   lay.origin.updateVariables()
-  lay.destination.updateVariables()
 
   #[var L = lay.context.getLua()
   L.getGlobal("View")     # get View table
