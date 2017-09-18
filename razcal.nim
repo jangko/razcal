@@ -289,47 +289,41 @@ proc main =
     pos_x = 0.0
     pos_y = 0.0
 
-  while not w.shouldClose():
-    let s = w.framebufSize()
-    glViewport(0, 0, GLsizei(s.w), GLsizei(s.h))
+  let s = w.framebufSize()
+  glViewport(0, 0, GLsizei(s.w), GLsizei(s.h))
 
+  while not w.shouldClose():
     glClearColor(0.3, 0.3, 0.32, 1.0)
-    glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
+    glClear(GL_COLOR_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
 
     nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
-
     nvg.nvgBeginPath()
     nvg.nvgCircle(pos_x, pos_y, 50.0)
     nvg.nvgFillColor(nvgRGBAf(1.0, 0.7, 0.0, 1.0))
     let stroke_width = 10.0
     nvg.nvgStroke(0.0, 0.5, 1.0, 1.0, stroke_width)
+    nvg.nvgEndFrame()
 
     case animState
     of ANIM_START:
       startTime = getTime()
       animState = ANIM_RUN
-      nvg.nvgEndFrame()
-      w.swapBufs()
-      pollEvents()
     of ANIM_RUN:
       let elapsed = getTime() - startTime
       let timeCurve = elapsed / anim.duration
       for a in anim.anims:
         interpolate(a.view.origin, a.destination, a.current, timeCurve)
         a.view.current = a.current
+
+      nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
       lay.root.drawView(nvg)
       nvg.nvgEndFrame()
-      if elapsed > anim.duration: animState = ANIM_STOP
       w.swapBufs()
-      pollEvents()
+      if elapsed > anim.duration: animState = ANIM_STOP
     of ANIM_STOP:
       for a in anim.anims:
         a.view.setOrigin(a.destination)
       animState = ANIM_NONE
-      lay.root.drawView(nvg)
-      nvg.nvgEndFrame()
-      w.swapBufs()
-      pollEvents()
     else:
       lay.root.drawView(nvg)
       nvg.nvgEndFrame()
