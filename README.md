@@ -102,3 +102,7 @@ documentation none, tutorial none.
 The first screenshot ever:
 
 ![Screenshot](examples/screenshot-1.png)
+
+The first working animation:
+
+![Animation](examples/animation-1.gif)
