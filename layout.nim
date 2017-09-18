@@ -21,6 +21,7 @@ proc newView*(name: Ident): View =
   result.children = @[]
   result.idx = -1
   result.dependencies = initSet[View]()
+  result.visible = true
 
 proc newView*(parent: View, name: Ident): View =
   assert(parent != nil)
@@ -45,6 +46,10 @@ proc setOrigin*(view: View) =
   view.current = view.origin
   for child in view.children:
     child.setOrigin()
+
+proc setOrigin*(view: View, origin: VarSet) =
+  view.origin = origin
+  view.current = origin
 
 proc getChildren*(view: View): seq[View] =
   view.children

@@ -76,8 +76,8 @@ documentation none, tutorial none.
       * ~constraints can be contained in class~
     * ~a temporary set of variable during transition returned from interpolator~
       * ~predefined or user defined interpolator~
-    * after animation ended: discard origin, put destination to origin
-    * animation clock
+    * ~after animation ended: discard origin, put destination to origin~
+    * ~animation clock~
   * applying functional constraint
   * applying prop to view
   * applying style to view

@@ -1,5 +1,5 @@
 import os, glfw, nvg, nimLUA, opengl, parser, razcontext, semcheck
-import streams, ast, layout, idents
+import streams, ast, layout, idents, glfw/wrapper, interpolator
 
 proc load_glex() {.importc, cdecl.}
 proc nvgTextBounds*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =
@@ -204,13 +204,48 @@ proc loadFonts(nvg: NVGContext) =
   discard nvg.nvgAddFallbackFontId(sans, emoji)
   discard nvg.nvgAddFallbackFontId(bold, emoji)
 
-proc draw*(view: View, nvg: NVGContext) =
+proc drawButton(nvg: NVGContext, x, y, w, h: float64, col: NVGcolor, text: string) =
+  let cornerRadius = 4.0
+  let bg = nvg.nvgLinearGradient(x,y,x,y+h, nvgRGBA(255,255,255,32), nvgRGBA(0,0,0,32))
+  let tw = nvg.nvgTextBounds(0,0, text)
+
   nvg.nvgBeginPath()
-  nvg.nvgRect(view.getLeft(), view.getTop(),
-    view.getWidth(), view.getHeight())
+  nvg.nvgRoundedRect(x+1,y+1, w-2,h-2, cornerRadius-1)
+  nvg.nvgFillColor(col)
+  nvg.nvgFill()
+  nvg.nvgFillPaint(bg)
+  nvg.nvgFill()
+
+  nvg.nvgBeginPath()
+  nvg.nvgRoundedRect(x+0.5,y+0.5, w-1,h-1, cornerRadius-0.5)
+  #nvg.nvgStrokeColor(nvgRGBA(0,0,0,48))
+  #nvg.nvgStroke()
   nvg.nvgStroke(1.0, 0.0, 0.0, 1.0, 2.0)
+
+  nvg.nvgFontSize(20.0)
+  nvg.nvgFontFace("sans-bold")
+  nvg.nvgTextAlign(NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
+  nvg.nvgFillColor(nvgRGBA(0,0,0,160))
+  discard nvg.nvgText(x+w*0.5-tw*0.5,y+h*0.5-1,text)
+  nvg.nvgFillColor(nvgRGBA(255,255,255,160))
+  discard nvg.nvgText(x+w*0.5-tw*0.5,y+h*0.5,text)
+
+proc drawView*(view: View, nvg: NVGContext) =
+  let red = nvgRGBA(128,16,8,255)
+
+  if view.visible:
+    nvg.drawButton(view.getLeft(), view.getTop(),
+      view.getWidth(), view.getHeight(), red, view.name.s)
+
   for child in view.children:
-    child.draw(nvg)
+    child.drawView(nvg)
+
+type
+  ANIM_STATE = enum
+    ANIM_NONE
+    ANIM_START
+    ANIM_RUN
+    ANIM_STOP
 
 proc main =
   var ctx = openRazContext()
@@ -219,7 +254,7 @@ proc main =
   if lay == nil: return
 
   glfw.init()
-  var w = newGlWin(nMultiSamples = 4)
+  var w = newGlWin(dim = (w: screenWidth, h: screenHeight), nMultiSamples = 4)
   w.makeContextCurrent()
   load_glex()
   opengl.loadExtensions()
@@ -232,13 +267,27 @@ proc main =
   nvg.loadFonts()
   L.bindNVG(nvg)
 
-  #try:
-  #  ctx.executeLua("main.lua")
-  #except OtherError as ex:
-  #  echo ex.msg
-  #except Exception as ex:
-  #  echo "unknown error: ", ex.msg
-  #  writeStackTrace()
+  var animState = ANIM_NONE
+  var anim1 = lay.getAnimation("anim1")
+  var anim2 = lay.getAnimation("anim2")
+  var anim = anim2
+
+  proc keyboardCB(win: Win, key: Key, scanCode: int, action: KeyAction, modKeys: ModifierKeySet) =
+    if key == keyF1:
+      if animState == ANIM_NONE and anim != anim1:
+        anim = lay.getAnimation("anim1")
+        animState = ANIM_START
+
+    if key == keyF2:
+      if animState == ANIM_NONE and anim != anim2:
+        anim = lay.getAnimation("anim2")
+        animState = ANIM_START
+
+  w.keyCb = keyboardCB
+  var
+    startTime = 0.0
+    pos_x = 0.0
+    pos_y = 0.0
 
   while not w.shouldClose():
     let s = w.framebufSize()
@@ -249,30 +298,43 @@ proc main =
 
     nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
 
-    let
-      pos_x = 50.0
-      pos_y = 50.0
-
     nvg.nvgBeginPath()
-    nvg.nvgCircle(50, pos_x, pos_y)
+    nvg.nvgCircle(pos_x, pos_y, 50.0)
     nvg.nvgFillColor(nvgRGBAf(1.0, 0.7, 0.0, 1.0))
     let stroke_width = 10.0
     nvg.nvgStroke(0.0, 0.5, 1.0, 1.0, stroke_width)
 
-    lay.root.draw(nvg)
-
-    nvg.nvgEndFrame()
-
-    #try:
-    #  ctx.callF("updateScene")
-    #except OtherError as ex:
-    #  echo ex.msg
-    #except Exception as ex:
-    #  echo "unknown error: ", ex.msg
-    #  writeStackTrace()
-
-    w.swapBufs()
-    waitEvents()
+    case animState
+    of ANIM_START:
+      startTime = getTime()
+      animState = ANIM_RUN
+      nvg.nvgEndFrame()
+      w.swapBufs()
+      pollEvents()
+    of ANIM_RUN:
+      let elapsed = getTime() - startTime
+      let timeCurve = elapsed / anim.duration
+      for a in anim.anims:
+        interpolate(a.view.origin, a.destination, a.current, timeCurve)
+        a.view.current = a.current
+      lay.root.drawView(nvg)
+      nvg.nvgEndFrame()
+      if elapsed > anim.duration: animState = ANIM_STOP
+      w.swapBufs()
+      pollEvents()
+    of ANIM_STOP:
+      for a in anim.anims:
+        a.view.setOrigin(a.destination)
+      animState = ANIM_NONE
+      lay.root.drawView(nvg)
+      nvg.nvgEndFrame()
+      w.swapBufs()
+      pollEvents()
+    else:
+      lay.root.drawView(nvg)
+      nvg.nvgEndFrame()
+      w.swapBufs()
+      waitEvents()
 
   nvg.nvgDelete()
   w.destroy()

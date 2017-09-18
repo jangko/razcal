@@ -48,6 +48,9 @@ type
     wDrag, wDragEnd, wDragEnter, wDragLeave
     wDragOver, wDragStart, wOnDrop
 
+    # others
+    wTrue, wFalse
+
 const
   specialWords* = [
     "+", "-", "*", "/",
@@ -79,6 +82,8 @@ const
 
     "drag", "dragEnd", "dragEnter", "dragLeave",
     "dragOver", "dragStart", "onDrop",
+
+    "true", "false",
   ]
 
   flexOpr* = {wEquals, wGreaterOrEqual, wLessOrEqual}

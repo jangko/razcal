@@ -1,6 +1,10 @@
 import ast, layout, idents, kiwi, tables, razcontext, hashes, strutils
 import nimLUA, keywords, sets
 
+const
+  screenWidth* = 800
+  screenHeight* = 600
+
 type
   Interpolator = proc(): int
 
@@ -63,6 +67,7 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.root = newView(root)
   result.root.symNode = newViewSymbol(n, result.root).newSymbolNode()
   result.root.body = result.emptyNode
+  result.root.visible = false
   result.solver.setBasicConstraint(result.root)
 
 proc getRoot(lay: Layout): View =
@@ -70,6 +75,11 @@ proc getRoot(lay: Layout): View =
 
 proc getIdent(lay: Layout, s: string): Ident =
   result = lay.context.getIdent(s)
+
+proc getAnimation*(lay: Layout, name: string): Animation =
+  let id = lay.getIdent(name)
+  let symNode = lay.animTbl.getOrDefault(id)
+  if symNode != nil: result = symNode.sym.anim
 
 proc internalErrorImpl(lay: Layout, kind: MsgKind,
   fileName: string, line: int, args: varargs[string, `$`]) =
@@ -152,7 +162,7 @@ proc semViewName(lay: Layout, n: Node, lastIdent: Node): Node =
 proc semViewClass(lay: Layout, n: Node): Node =
   result = n
 
-proc semConstList(lay: Layout, n: Node) =
+proc semFlexList(lay: Layout, n: Node) =
   discard
 
 proc semEventList(lay: Layout, n: Node) =
@@ -164,6 +174,7 @@ proc semEventList(lay: Layout, n: Node) =
       lay.sourceError(errUndefinedEvent, ev[0], ev[0].ident)
 
 proc semPropList(lay: Layout, n: Node) =
+  let view = lay.lastView
   for prop in n.sons:
     ensure(prop.kind == nkProp)
     ensure(prop[0].kind == nkIdent)
@@ -171,12 +182,19 @@ proc semPropList(lay: Layout, n: Node) =
     if id notin validProps:
       lay.sourceError(errUndefinedProp, prop[0], prop[0].ident)
 
+    case id
+    of wVisible:
+      let val = toKeyWord(prop[1])
+      view.visible = val == wTrue
+    else:
+      discard
+
 proc semViewBody(lay: Layout, n: Node): Node =
   ensure(n.kind in {nkStmtList, nkEmpty})
 
   for m in n.sons:
     case m.kind
-    of nkFlexList: lay.semConstList(m)
+    of nkFlexList: lay.semFlexList(m)
     of nkEventList: lay.semEventList(m)
     of nkPropList:  lay.semPropList(m)
     of nkEmpty: discard
@@ -1030,8 +1048,8 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
   lay.root.current = dest
   ani.solver.addConstraint(dest.top == 0)
   ani.solver.addConstraint(dest.left == 0)
-  ani.solver.addConstraint(dest.width == 640)
-  ani.solver.addConstraint(dest.height == 480)
+  ani.solver.addConstraint(dest.width == screenWidth)
+  ani.solver.addConstraint(dest.height == screenHeight)
 
   for m in n.sons:
     ensure(m.kind == nkAnim)
@@ -1138,6 +1156,8 @@ proc secTopLevel*(lay: Layout, n: Node) =
   for son in n.sons:
     lay.secAnimation(son)
 
+  lay.root.setOrigin()
+
   for s in values(lay.classTbl):
     if sfUsed notin s.sym.flags:
       lay.sourceWarning(warnClassNotUsed, s, s.sym.name)
@@ -1209,8 +1229,8 @@ proc semCheck*(lay: Layout, n: Node) =
 
   lay.origin.addConstraint(lay.root.origin.top == 0)
   lay.origin.addConstraint(lay.root.origin.left == 0)
-  lay.origin.addConstraint(lay.root.origin.width == 640)
-  lay.origin.addConstraint(lay.root.origin.height == 480)
+  lay.origin.addConstraint(lay.root.origin.width == screenWidth)
+  lay.origin.addConstraint(lay.root.origin.height == screenHeight)
 
   # semcheck first pass
   # collecting symbols

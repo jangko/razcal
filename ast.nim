@@ -22,6 +22,7 @@ type
     symNode*: Node
     body*: Node
     dependencies*: HashSet[View]
+    visible*: bool
 
   Anim* = ref object
     view*: View
