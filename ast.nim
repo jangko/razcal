@@ -1,6 +1,8 @@
 import sets, idents, strutils, razcontext, kiwi, tables, sets
 
 type
+  Interpolator* = proc (origin, destination, current: VarSet, t: float64)
+
   Scope* = ref object
     depthLevel*: int
     symbols*: HashSet[Symbol]
@@ -26,7 +28,7 @@ type
 
   Anim* = ref object
     view*: View
-    interpolator*: Ident
+    interpolator*: Interpolator
     startAni*: float64
     endAni*: float64
     current*: VarSet

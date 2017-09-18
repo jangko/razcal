@@ -1,13 +1,11 @@
 import ast, layout, idents, kiwi, tables, razcontext, hashes, strutils
-import nimLUA, keywords, sets
+import nimLUA, keywords, sets, interpolator
 
 const
   screenWidth* = 800
   screenHeight* = 600
 
 type
-  Interpolator = proc(): int
-
   Layout* = ref object of IDobj
     root*: View                   # every layout/scene root
     classTbl: Table[Ident, Node] # string to SymbolNode.skClass
@@ -57,6 +55,7 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.classTbl = initTable[Ident, Node]()
   result.aliasTbl = initTable[Ident, Node]()
   result.animTbl = initTable[Ident, Node]()
+  result.interpolator = initTable[Ident, Interpolator]()
   result.solver = newSolver()
   result.origin = result.solver
   result.context = context
@@ -69,6 +68,9 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.root.body = result.emptyNode
   result.root.visible = false
   result.solver.setBasicConstraint(result.root)
+
+  for c in easingList:
+    result.interpolator[context.getIdent(c[0])] = c[1]
 
 proc getRoot(lay: Layout): View =
   result = lay.root
@@ -1080,7 +1082,11 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
       if endAni < startAni: endAni = startAni + 0.01
       if endAni > 1.0: endAni = 1.0
 
-    let interpolator = if m[4].kind == nkIdent: m[4].ident else: lay.getIdent("linear")
+    let interpolatorName = if m[4].kind == nkIdent: m[4].ident else: lay.getIdent("linearInterpolation")
+    let interpolator = lay.interpolator.getOrDefault(interpolatorName)
+    if interpolator.isNil:
+      lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
+
     let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, endAni: endAni,
       destination: destination, current: newVarSet(view.name))
     ani.anims.add(anim)

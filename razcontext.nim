@@ -107,6 +107,7 @@ type
     errUnbalancedArm
     errUnsatisfiableConstraint
     errUndefinedView
+    errUndefinedInterpolator
     errNeedToParticipate
 
     # other's errors
@@ -182,6 +183,7 @@ const
     errUnbalancedArm: "left and right arm is not balanced here",
     errUnsatisfiableConstraint: "unsatisfiable constraint",
     errUndefinedView: "`$1` is an undefined view",
+    errUndefinedInterpolator: "`$1` is an undefined interpolator",
     errNeedToParticipate: "`$1` need to participate in `$2` animation",
 
     # other errors

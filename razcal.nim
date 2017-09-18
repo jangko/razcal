@@ -312,7 +312,7 @@ proc main =
       let elapsed = getTime() - startTime
       let timeCurve = elapsed / anim.duration
       for a in anim.anims:
-        interpolate(a.view.origin, a.destination, a.current, timeCurve)
+        a.interpolator(a.view.origin, a.destination, a.current, timeCurve)
         a.view.current = a.current
 
       nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
