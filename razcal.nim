@@ -3,93 +3,89 @@ import streams, ast, layout, idents, glfw/wrapper, interpolator
 import types
 
 proc load_glex() {.importc, cdecl.}
-proc nvgTextBounds*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =
-  result = ctx.nvgTextBounds(x, y, str, nil, nil)
+proc textBounds*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =
+  result = ctx.textBounds(x, y, str, nil, nil)
 
-proc nvgText*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =
-  result = ctx.nvgText(x, y, str, nil)
+proc text*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =
+  result = ctx.text(x, y, str, nil)
 
 proc bindNVG(LX: PState, nvg: NVGcontext) =
-
-  #nimLuaOptions(nloDebug, true)
   LX.bindObject(NVGContext -> "nvg"):
-    #nvgCreate -> "create"
-    #~nvgDelete
-    nvgBeginFrame -> "beginFrame"
-    nvgCancelFrame -> "cancelFrame"
-    nvgEndFrame -> "endFrame"
-    nvgGlobalCompositeOperation -> "globalCompositeOperation"
-    nvgGlobalCompositeBlendFunc -> "globalCompositeBlendFunc"
-    nvgGlobalCompositeBlendFuncSeparate -> "globalCompositeBlendFuncSeparate"
-    nvgSave -> "save"
-    nvgRestore -> "restore"
-    nvgReset -> "reset"
-    nvgShapeAntiAlias -> "shapeAntiAlias"
-    nvgStrokeColor -> "strokeColor"
-    nvgStrokePaint -> "strokePaint"
-    nvgFillColor -> "fillColor"
-    nvgFillPaint -> "fillPaint"
-    nvgMiterLimit -> "miterLimit"
-    nvgStrokeWidth -> "strokeWidth"
-    nvgLineCap -> "lineCap"
-    nvgLineJoin -> "lineJoin"
-    nvgGlobalAlpha -> "globalAlpha"
-    nvgResetTransform -> "resetTransform"
-    nvgTransform -> "transform"
-    nvgTranslate -> "translate"
-    nvgRotate -> "rotate"
-    nvgSkewX -> "skewX"
-    nvgSkewY -> "skewY"
-    nvgScale -> "scale"
-    nvgCurrentTransform -> "currentTransform"
-    nvgCreateImage -> "createImage"
-    nvgCreateImageMem -> "createImageMem"
-    nvgCreateImageRGBA -> "createImageRGBA"
-    nvgUpdateImage -> "updateImage"
-    nvgImageSize -> "imageSize"
-    nvgDeleteImage -> "deleteImage"
-    nvgLinearGradient -> "linearGradient"
-    nvgBoxGradient -> "boxGradient"
-    nvgRadialGradient -> "radialGradient"
-    nvgImagePattern -> "imagePattern"
-    nvgScissor -> "scissor"
-    nvgIntersectScissor -> "intersectScissor"
-    nvgResetScissor -> "resetScissor"
-    nvgBeginPath -> "beginPath"
-    nvgMoveTo -> "moveTo"
-    nvgLineTo -> "lineTo"
-    nvgBezierTo -> "bezierTo"
-    nvgQuadTo -> "quadTo"
-    nvgArcTo -> "arcTo"
-    nvgClosePath -> "closePath"
-    nvgPathWinding -> "pathWinding"
-    nvgArc -> "arc"
-    nvgRect -> "rect"
-    nvgRoundedRect -> "roundedRect"
-    nvgRoundedRectVarying -> "rectVarying"
-    nvgEllipse -> "ellipse"
-    nvgCircle -> "circle"
-    nvgFill -> "fill"
-    nvgStroke -> "stroke"
-    nvgCreateFont -> "createFont"
-    nvgCreateFontMem -> "createFontMem"
-    nvgFindFont -> "findFont"
-    nvgAddFallbackFontId -> "addFallbackFontId"
-    nvgAddFallbackFont -> "addFallbackFont"
-    nvgFontSize -> "fontSize"
-    nvgFontBlur -> "fontBlur"
-    nvgTextLetterSpacing -> "textLetterSpacing"
-    nvgTextLineHeight -> "textLineHeight"
-    nvgTextAlign -> "textAlign"
-    nvgFontFaceId -> "fontFaceId"
-    nvgFontFace -> "fontFace"
-    nvgText -> "text"
-    nvgTextBox -> "textBox"
-    nvgTextBounds -> "textBounds"
-    nvgTextBoxBounds -> "textBoxBounds"
-    nvgTextGlyphPositions -> "textGlyphPositions"
-    nvgTextMetrics -> "textMetrics"
-    nvgTextBreakLines -> "textBreakLines"
+    beginFrame -> "beginFrame"
+    cancelFrame -> "cancelFrame"
+    endFrame -> "endFrame"
+    globalCompositeOperation -> "globalCompositeOperation"
+    globalCompositeBlendFunc -> "globalCompositeBlendFunc"
+    globalCompositeBlendFuncSeparate -> "globalCompositeBlendFuncSeparate"
+    save -> "save"
+    restore -> "restore"
+    reset -> "reset"
+    shapeAntiAlias -> "shapeAntiAlias"
+    strokeColor -> "strokeColor"
+    strokePaint -> "strokePaint"
+    fillColor -> "fillColor"
+    fillPaint -> "fillPaint"
+    miterLimit -> "miterLimit"
+    strokeWidth -> "strokeWidth"
+    lineCap -> "lineCap"
+    lineJoin -> "lineJoin"
+    globalAlpha -> "globalAlpha"
+    resetTransform -> "resetTransform"
+    transform -> "transform"
+    translate -> "translate"
+    rotate -> "rotate"
+    skewX -> "skewX"
+    skewY -> "skewY"
+    scale -> "scale"
+    currentTransform -> "currentTransform"
+    createImage -> "createImage"
+    createImageMem -> "createImageMem"
+    createImageRGBA -> "createImageRGBA"
+    updateImage -> "updateImage"
+    imageSize -> "imageSize"
+    deleteImage -> "deleteImage"
+    linearGradient -> "linearGradient"
+    boxGradient -> "boxGradient"
+    radialGradient -> "radialGradient"
+    imagePattern -> "imagePattern"
+    scissor -> "scissor"
+    intersectScissor -> "intersectScissor"
+    resetScissor -> "resetScissor"
+    beginPath -> "beginPath"
+    moveTo -> "moveTo"
+    lineTo -> "lineTo"
+    bezierTo -> "bezierTo"
+    quadTo -> "quadTo"
+    arcTo -> "arcTo"
+    closePath -> "closePath"
+    pathWinding -> "pathWinding"
+    arc -> "arc"
+    rect -> "rect"
+    roundedRect -> "roundedRect"
+    roundedRectVarying -> "rectVarying"
+    ellipse -> "ellipse"
+    circle -> "circle"
+    fill -> "fill"
+    stroke -> "stroke"
+    createFont -> "createFont"
+    createFontMem -> "createFontMem"
+    findFont -> "findFont"
+    addFallbackFontId -> "addFallbackFontId"
+    addFallbackFont -> "addFallbackFont"
+    fontSize -> "fontSize"
+    fontBlur -> "fontBlur"
+    textLetterSpacing -> "textLetterSpacing"
+    textLineHeight -> "textLineHeight"
+    textAlign -> "textAlign"
+    fontFaceId -> "fontFaceId"
+    fontFace -> "fontFace"
+    text -> "text"
+    textBox -> "textBox"
+    textBounds -> "textBounds"
+    textBoxBounds -> "textBoxBounds"
+    textGlyphPositions -> "textGlyphPositions"
+    textMetrics -> "textMetrics"
+    textBreakLines -> "textBreakLines"
 
   LX.bindConst("nvg"):
     NVG_ANTIALIAS -> "ANTIALIAS"
@@ -182,55 +178,55 @@ proc callF(ctx: RazContext, funcName: string) =
     ctx.otherError(errLua, errorMsg)
 
 proc loadFonts(nvg: NVGContext) =
-  let icons = nvg.nvgCreateFont("icons", "examples/fonts/entypo.ttf")
+  let icons = nvg.createFont("icons", "examples/fonts/entypo.ttf")
   if icons == -1:
     echo "Could not add font icons."
     return
 
-  let sans = nvg.nvgCreateFont("sans", "examples/fonts/Roboto-Regular.ttf")
+  let sans = nvg.createFont("sans", "examples/fonts/Roboto-Regular.ttf")
   if sans == -1:
     echo "Could not add font italic."
     return
 
-  let bold = nvg.nvgCreateFont("sans-bold", "examples/fonts/Roboto-Bold.ttf")
+  let bold = nvg.createFont("sans-bold", "examples/fonts/Roboto-Bold.ttf")
   if bold == -1:
     echo "Could not add font bold."
     return
 
-  let emoji = nvg.nvgCreateFont("emoji", "examples/fonts/NotoEmoji-Regular.ttf")
+  let emoji = nvg.createFont("emoji", "examples/fonts/NotoEmoji-Regular.ttf")
   if emoji == -1:
     echo "Could not add font emoji."
     return
 
-  discard nvg.nvgAddFallbackFontId(sans, emoji)
-  discard nvg.nvgAddFallbackFontId(bold, emoji)
+  discard nvg.addFallbackFontId(sans, emoji)
+  discard nvg.addFallbackFontId(bold, emoji)
 
 proc drawButton(nvg: NVGContext, x, y, w, h: float64, col: NVGcolor, text: string) =
   let cornerRadius = 4.0
-  let bg = nvg.nvgLinearGradient(x,y,x,y+h, nvgRGBA(255,255,255,32), nvgRGBA(0,0,0,32))
-  let tw = nvg.nvgTextBounds(0,0, text)
+  let bg = nvg.linearGradient(x,y,x,y+h, nvgRGBA(255,255,255,32), nvgRGBA(0,0,0,32))
+  let tw = nvg.textBounds(0,0, text)
 
-  nvg.nvgBeginPath()
-  nvg.nvgRoundedRect(x+1,y+1, w-2,h-2, cornerRadius-1)
-  nvg.nvgFillColor(col)
-  nvg.nvgFill()
-  nvg.nvgFillPaint(bg)
-  nvg.nvgFill()
+  nvg.beginPath()
+  nvg.roundedRect(x+1,y+1, w-2,h-2, cornerRadius-1)
+  nvg.fillColor(col)
+  nvg.fill()
+  nvg.fillPaint(bg)
+  nvg.fill()
 
-  nvg.nvgBeginPath()
-  nvg.nvgRoundedRect(x+0.5,y+0.5, w-1,h-1, cornerRadius-0.5)
+  nvg.beginPath()
+  nvg.roundedRect(x+0.5,y+0.5, w-1,h-1, cornerRadius-0.5)
   #nvg.nvgStrokeColor(nvgRGBA(0,0,0,48))
-  nvg.nvgStroke(0, 0, 0, 48, 1.0)
-  nvg.nvgStroke(1.0, 0.0, 0.0, 1.0, 2.0)
+  nvg.stroke(0, 0, 0, 48, 1.0)
+  nvg.stroke(1.0, 0.0, 0.0, 1.0, 2.0)
 
   if text.len > 0:
-    nvg.nvgFontSize(20.0)
-    nvg.nvgFontFace("sans-bold")
-    nvg.nvgTextAlign(NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-    nvg.nvgFillColor(nvgRGBA(0,0,0,160))
-    discard nvg.nvgText(x+w*0.5-tw*0.5,y+h*0.5-1,text)
-    nvg.nvgFillColor(nvgRGBA(255,255,255,160))
-    discard nvg.nvgText(x+w*0.5-tw*0.5,y+h*0.5,text)
+    nvg.fontSize(20.0)
+    nvg.fontFace("sans-bold")
+    nvg.textAlign(NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
+    nvg.fillColor(nvgRGBA(0,0,0,160))
+    discard nvg.text(x+w*0.5-tw*0.5,y+h*0.5-1,text)
+    nvg.fillColor(nvgRGBA(255,255,255,160))
+    discard nvg.text(x+w*0.5-tw*0.5,y+h*0.5,text)
 
 proc drawView*(view: View, nvg: NVGContext) =
   let red = nvgRGBA(128,16,8,255)
@@ -298,13 +294,13 @@ proc main =
     glClearColor(0.3, 0.3, 0.32, 1.0)
     glClear(GL_COLOR_BUFFER_BIT or GL_STENCIL_BUFFER_BIT)
 
-    nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
-    nvg.nvgBeginPath()
-    nvg.nvgCircle(pos_x, pos_y, 50.0)
-    nvg.nvgFillColor(nvgRGBAf(1.0, 0.7, 0.0, 1.0))
+    nvg.beginFrame(s.w.cint, s.h.cint, 1.0)
+    nvg.beginPath()
+    nvg.circle(pos_x, pos_y, 50.0)
+    nvg.fillColor(nvgRGBAf(1.0, 0.7, 0.0, 1.0))
     let stroke_width = 10.0
-    nvg.nvgStroke(0.0, 0.5, 1.0, 1.0, stroke_width)
-    nvg.nvgEndFrame()
+    nvg.stroke(0.0, 0.5, 1.0, 1.0, stroke_width)
+    nvg.endFrame()
 
     case animState
     of ANIM_START:
@@ -320,9 +316,9 @@ proc main =
           let timeCurve = (elapsed - a.startAni) / a.duration
           a.interpolator(a.view.origin, a.destination, a.current, timeCurve)
 
-      nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
+      nvg.beginFrame(s.w.cint, s.h.cint, 1.0)
       lay.root.drawView(nvg)
-      nvg.nvgEndFrame()
+      nvg.endFrame()
       w.swapBufs()
       if elapsed > anim.duration: animState = ANIM_STOP
     of ANIM_STOP:
@@ -331,7 +327,7 @@ proc main =
       animState = ANIM_NONE
     else:
       lay.root.drawView(nvg)
-      nvg.nvgEndFrame()
+      nvg.endFrame()
       w.swapBufs()
       waitEvents()
 
