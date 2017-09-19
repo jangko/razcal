@@ -1,5 +1,5 @@
-import strutils, idents, os, tables, utils
-import nimLUA
+import strutils, idents, tables, utils
+import nimLUA, types, os, interpolator, ast
 
 var IDSeed {.compileTime.} = 0
 
@@ -11,40 +11,14 @@ macro getPrevID*(): untyped =
   result = newIntLitNode(NLMaxID-IDSeed+1)
 
 type
-  # information about a file(raz, lua, etc)
-  FileInfo* = object
-    fullPath: string           # This is a canonical full filesystem path
-    projPath*: string          # This is relative to the project's root
-    shortName*: string         # short name of the module
-    fileName*: string          # name.ext
-
   # global app context, one per app
   RazContext* = ref object
     identCache: IdentCache     # only one IdentCache per app
-    fileInfos: seq[FileInfo]   # FileInfo list
+    fileInfos: seq[RazFileInfo]   # FileInfo list
     fileNameToIndex: Table[string, int32] # map canonical fileName into FileInfo index
     binaryPath: string         # app path
     lua: lua_State
-
-  # used in Node and Symbol
-  LineInfo* = object
-    line*, col*: int16
-    fileIndex*: int32          # index into FileInfo list
-
-  # Lexer and Parser throw this exception
-  SourceError* = ref object of Exception
-    line*, column*: int
-    lineContent*: string       # full source line content
-    fileIndex*: int32          # index into FileInfo list
-
-  # Semcheck and friends throw this exception
-  # useful for debugging purpose
-  # A stable app should never throw this exception
-  InternalError* = ref object of Exception
-    line*: int                 # Nim source line
-    fileName*: string          # Nim source file name
-
-  OtherError* = ref object of Exception
+    interpolator: Table[Ident, Interpolator]
 
   MsgKind* = enum
     # lexer's errors
@@ -202,6 +176,10 @@ proc openRazContext*(): RazContext =
   result.fileNameToIndex = initTable[string, int32]()
   result.binaryPath = getAppDir()
   result.lua = newNimLua()
+  result.interpolator = initTable[Ident, Interpolator]()
+
+  for c in easingList:
+    result.interpolator[result.identCache.getIdent(c[0])] = c[1]
 
 proc close*(ctx: RazContext) =
   ctx.lua.close()
@@ -275,7 +253,7 @@ proc printError*(ctx: RazContext, err: InternalError) =
   let msg = "$1:$2 -> Internal Error: $3" % [err.fileName, $err.line, err.msg]
   echo msg
 
-proc newFileInfo(fullPath, projPath: string): FileInfo =
+proc newFileInfo(fullPath, projPath: string): RazFileInfo =
   result.fullPath = fullPath
   result.projPath = projPath
   let fileName = projPath.extractfileName
@@ -306,13 +284,16 @@ proc fileInfoIdx*(ctx: RazContext, fileName: string; isKnownFile: var bool): int
                                          else: shortenDir(ctx.binaryPath, canon)))
     ctx.fileNameToIndex[canon] = result
 
-proc toFileName*(ctx: RazContext, info: LineInfo): string =
+proc toFileName*(ctx: RazContext, info: RazLineInfo): string =
   assert(info.fileIndex >= 0 and info.fileIndex < ctx.fileInfos.len)
   result = ctx.fileInfos[info.fileIndex].fileName
 
-proc toFullPath*(ctx: RazContext, info: LineInfo): string =
+proc toFullPath*(ctx: RazContext, info: RazLineInfo): string =
   assert(info.fileIndex >= 0 and info.fileIndex < ctx.fileInfos.len)
   result = ctx.fileInfos[info.fileIndex].fullPath
 
-proc toString*(ctx: RazContext, info: LineInfo): string =
+proc toString*(ctx: RazContext, info: RazLineInfo): string =
   result = "$1($2:$3)" % [ctx.toFileName(info), $info.line, $(info.col+1)]
+
+proc getInterpolator*(ctx: RazContext, ident: Ident): Interpolator {.inline.} =
+  result = ctx.interpolator.getOrDefault(ident)

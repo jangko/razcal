@@ -1,4 +1,5 @@
-import lexer, lexbase, idents, ast, semcheck, keywords, streams, razcontext
+import lexer, lexbase, idents, ast, semcheck, keywords
+import streams, razcontext, types
 
 type
   Parser* = object
@@ -48,7 +49,7 @@ proc eat(p: var Parser, kind: TokenKind) =
   else:
     p.error(errTokenExpected, "`" & TokenKindToStr[kind] & "`")
 
-proc getLineInfo(p: Parser): LineInfo =
+proc getLineInfo(p: Parser): RazLineInfo =
   result.line = int16(p.tok.line)
   result.col = int16(p.tok.col)
   result.fileIndex = p.lex.fileIndex

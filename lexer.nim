@@ -1,4 +1,4 @@
-import lexbase, strutils, streams, idents, keywords, razcontext
+import lexbase, strutils, streams, idents, keywords, razcontext, types
 
 type
   Lexer* = object of BaseLexer

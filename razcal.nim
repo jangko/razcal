@@ -1,5 +1,6 @@
 import os, glfw, nvg, nimLUA, opengl, parser, razcontext, semcheck
 import streams, ast, layout, idents, glfw/wrapper, interpolator
+import types
 
 proc load_glex() {.importc, cdecl.}
 proc nvgTextBounds*(ctx: NVGContext; x, y: cfloat; str: cstring): cfloat =

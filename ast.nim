@@ -1,4 +1,4 @@
-import sets, idents, strutils, razcontext, kiwi, tables, sets
+import sets, idents, strutils, kiwi, tables, sets, types
 
 type
   Interpolator* = proc (origin, destination, current: VarSet, t: float64)
@@ -67,7 +67,7 @@ type
     flags*: set[SymFlags]
     name*: Ident
     pos*: int        # param position
-    lineInfo*: LineInfo
+    lineInfo*: RazLineInfo
 
   NodeKind* = enum
     nkEmpty
@@ -143,7 +143,7 @@ type
       variable*: kiwi.Variable
     else:
       sons*: seq[Node]
-    lineInfo*: LineInfo
+    lineInfo*: RazLineInfo
 
 const
   NodeWithVal* = {nkInt, nkUInt, nkFloat, nkString, nkCharLit,
@@ -186,7 +186,7 @@ proc newTree*(kind: NodeKind; children: varargs[Node]): Node =
   result = newNode(kind)
   result.sons = @children
 
-proc newNodeI*(kind: NodeKind, lineInfo: LineInfo): Node =
+proc newNodeI*(kind: NodeKind, lineInfo: RazLineInfo): Node =
   result = newNode(kind)
   result.lineInfo = lineInfo
 

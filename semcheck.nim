@@ -1,5 +1,5 @@
 import ast, layout, idents, kiwi, tables, razcontext, hashes, strutils
-import nimLUA, keywords, sets, interpolator
+import nimLUA, keywords, sets, interpolator, types
 
 const
   screenWidth* = 800
@@ -11,7 +11,6 @@ type
     classTbl: Table[Ident, Node] # string to SymbolNode.skClass
     aliasTbl: Table[Ident, Node]
     animTbl: Table[Ident, Node]
-    interpolator: Table[Ident, Interpolator]
     solver: kiwi.Solver          # constraint solver
     origin: kiwi.Solver
     context: RazContext          # ref to app global context
@@ -28,9 +27,12 @@ proc newInternalError(fileName: string, line: int, msg: string): InternalError =
   result.fileName = fileName
 
 # like assert, but better
-template ensure(cond: bool) =
-  if not cond: raise newInternalError(instantiationInfo().fileName,
-    instantiationInfo().line, astToStr(cond))
+when defined(release):
+  template ensure(cond: bool) = discard
+else:
+  template ensure(cond: bool) =
+    if not cond: raise newInternalError(instantiationInfo().fileName,
+      instantiationInfo().line, astToStr(cond))
 
 # convert identNode to SpecialWords
 proc toKeyWord(n: Node): SpecialWords =
@@ -55,7 +57,6 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.classTbl = initTable[Ident, Node]()
   result.aliasTbl = initTable[Ident, Node]()
   result.animTbl = initTable[Ident, Node]()
-  result.interpolator = initTable[Ident, Interpolator]()
   result.solver = newSolver()
   result.origin = result.solver
   result.context = context
@@ -68,9 +69,6 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.root.body = result.emptyNode
   result.root.visible = false
   result.solver.setBasicConstraint(result.root)
-
-  for c in easingList:
-    result.interpolator[context.getIdent(c[0])] = c[1]
 
 proc getRoot(lay: Layout): View =
   result = lay.root
@@ -100,7 +98,7 @@ proc otherError(lay: Layout, kind: MsgKind, args: varargs[string, `$`]) =
   # not internal error and not source error
   lay.context.otherError(kind, args)
 
-proc getCurrentLine*(lay: Layout, info: razcontext.LineInfo): string =
+proc getCurrentLine*(lay: Layout, info: RazLineInfo): string =
   # we don't have lexer getCurrentLine anymore
   # so we simulate one here
   let fileName = lay.context.toFullPath(info)
@@ -1083,7 +1081,7 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
       if endAni > 1.0: endAni = 1.0
 
     let interpolatorName = if m[4].kind == nkIdent: m[4].ident else: lay.getIdent("linearInterpolation")
-    let interpolator = lay.interpolator.getOrDefault(interpolatorName)
+    let interpolator = lay.context.getInterpolator(interpolatorName)
     if interpolator.isNil:
       lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
 
