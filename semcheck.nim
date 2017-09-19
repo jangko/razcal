@@ -1072,20 +1072,26 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
       startAni = m[2].toNumber()
       if startAni < 0.0: startAni = 0.0
       if startAni >= 1.0: startAni = 0.99
-    else:
+    elif m[2].kind != nkEmpty and m[3].kind != nkEmpty:
       startAni = m[2].toNumber()
       endAni = m[3].toNumber()
       if startAni < 0.0: startAni = 0.0
       if startAni >= 1.0: startAni = 0.99
       if endAni < startAni: endAni = startAni + 0.01
       if endAni > 1.0: endAni = 1.0
+    else:
+      startAni = 0.0
+      endAni = 1.0
+
+    startAni = ani.duration * startAni
+    endAni = ani.duration * endAni
 
     let interpolatorName = if m[4].kind == nkIdent: m[4].ident else: lay.getIdent("linearInterpolation")
     let interpolator = lay.context.getInterpolator(interpolatorName)
     if interpolator.isNil:
       lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
 
-    let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, endAni: endAni,
+    let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, duration: endAni - startAni,
       destination: destination, current: newVarSet(view.name))
     ani.anims.add(anim)
 

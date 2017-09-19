@@ -1,6 +1,6 @@
 import ast, math, macros, strutils
 
-const PI2 = PI * 2
+const PI2 = PI / 2
 
 proc linearInterpolation(p: float): float = p
 

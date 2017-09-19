@@ -30,7 +30,7 @@ type
     view*: View
     interpolator*: Interpolator
     startAni*: float64
-    endAni*: float64
+    duration*: float64
     current*: VarSet
     destination*: VarSet
 

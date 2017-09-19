@@ -309,12 +309,15 @@ proc main =
     of ANIM_START:
       startTime = getTime()
       animState = ANIM_RUN
+      for a in anim.anims:
+        a.interpolator(a.view.origin, a.destination, a.current, 0.0)
+        a.view.current = a.current
     of ANIM_RUN:
       let elapsed = getTime() - startTime
-      let timeCurve = elapsed / anim.duration
       for a in anim.anims:
-        a.interpolator(a.view.origin, a.destination, a.current, timeCurve)
-        a.view.current = a.current
+        if elapsed >= a.startAni:
+          let timeCurve = (elapsed - a.startAni) / a.duration
+          a.interpolator(a.view.origin, a.destination, a.current, timeCurve)
 
       nvg.nvgBeginFrame(s.w.cint, s.h.cint, 1.0)
       lay.root.drawView(nvg)
