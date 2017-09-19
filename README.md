@@ -59,6 +59,7 @@ documentation none, tutorial none.
     * ~tkPercent(%) tkIdent(name) tkNumber(duration)~
     * ~widget(::class)* tkNumber(start_ani) tkNumber(end_ani) tkIdent(interpolator)~
   * parse functional constraint
+  * parse conditional constraint
   * parse style section
   * parse prop section
 * semantic pass

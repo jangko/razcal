@@ -22,6 +22,7 @@ proc newView*(name: Ident): View =
   result.idx = -1
   result.dependencies = initSet[View]()
   result.visible = true
+  result.content = ""
 
 proc newView*(parent: View, name: Ident): View =
   assert(parent != nil)

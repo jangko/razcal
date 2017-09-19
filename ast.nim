@@ -25,6 +25,7 @@ type
     body*: Node
     dependencies*: HashSet[View]
     visible*: bool
+    content*: string
 
   Anim* = ref object
     view*: View

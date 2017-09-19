@@ -44,12 +44,15 @@ const
   OpChars        = {'+', '-', '*', '/', '\\', '<', '>', '!', '?', '^', '.',
                     '|', '=', '%', '&', '$', '@', '~', ':', '\x80'..'\xFF'}
 
-  TokenKindToStr*: array[TokenKind, string] = [
+  TokenKindToStr: array[TokenKind, string] = [
     "tkInvalid", "[EOF]", "tkComment", "tkNestedComment",
     "tkIdent", "tkNumber", "tkFloat", "tkString", "tkCharLit",
     ";", "`", ",", "(", ")", "{", "}", "[", "]",
     ".", "..", ":", "::", "!", "|", "%", "@", "=", ">=", "<=", "tkOpr",
     "program", "style", "alias", "flex", "event", "prop"]
+
+proc toString*(kind: TokenKind): string =
+  result = "`" & TokenKindToStr[kind] & "`"
 
 const
   Tabulator* = '\x09'

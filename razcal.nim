@@ -220,23 +220,24 @@ proc drawButton(nvg: NVGContext, x, y, w, h: float64, col: NVGcolor, text: strin
   nvg.nvgBeginPath()
   nvg.nvgRoundedRect(x+0.5,y+0.5, w-1,h-1, cornerRadius-0.5)
   #nvg.nvgStrokeColor(nvgRGBA(0,0,0,48))
-  #nvg.nvgStroke()
+  nvg.nvgStroke(0, 0, 0, 48, 1.0)
   nvg.nvgStroke(1.0, 0.0, 0.0, 1.0, 2.0)
 
-  nvg.nvgFontSize(20.0)
-  nvg.nvgFontFace("sans-bold")
-  nvg.nvgTextAlign(NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
-  nvg.nvgFillColor(nvgRGBA(0,0,0,160))
-  discard nvg.nvgText(x+w*0.5-tw*0.5,y+h*0.5-1,text)
-  nvg.nvgFillColor(nvgRGBA(255,255,255,160))
-  discard nvg.nvgText(x+w*0.5-tw*0.5,y+h*0.5,text)
+  if text.len > 0:
+    nvg.nvgFontSize(20.0)
+    nvg.nvgFontFace("sans-bold")
+    nvg.nvgTextAlign(NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
+    nvg.nvgFillColor(nvgRGBA(0,0,0,160))
+    discard nvg.nvgText(x+w*0.5-tw*0.5,y+h*0.5-1,text)
+    nvg.nvgFillColor(nvgRGBA(255,255,255,160))
+    discard nvg.nvgText(x+w*0.5-tw*0.5,y+h*0.5,text)
 
 proc drawView*(view: View, nvg: NVGContext) =
   let red = nvgRGBA(128,16,8,255)
 
   if view.visible:
     nvg.drawButton(view.getLeft(), view.getTop(),
-      view.getWidth(), view.getHeight(), red, view.name.s)
+      view.getWidth(), view.getHeight(), red, view.content)
 
   for child in view.children:
     child.drawView(nvg)
@@ -271,7 +272,7 @@ proc main =
   var animState = ANIM_NONE
   var anim1 = lay.getAnimation("anim1")
   var anim2 = lay.getAnimation("anim2")
-  var anim = anim2
+  var anim  = Animation(nil)
 
   proc keyboardCB(win: Win, key: Key, scanCode: int, action: KeyAction, modKeys: ModifierKeySet) =
     if key == keyF1:

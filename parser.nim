@@ -47,7 +47,7 @@ proc eat(p: var Parser, kind: TokenKind) =
   if p.tok.kind == kind:
     p.getTok()
   else:
-    p.error(errTokenExpected, "`" & TokenKindToStr[kind] & "`")
+    p.error(errTokenExpected, kind.toString(), toString(p.tok.kind))
 
 proc getLineInfo(p: Parser): RazLineInfo =
   result.line = int16(p.tok.line)
@@ -226,6 +226,7 @@ proc parseViewClassArgs(p: var Parser): Node =
     eat(p, tkParRi)
 
 proc parseViewClass(p: var Parser): Node =
+  if p.tok.indent >= 0 and p.tok.indent <= p.currInd: return p.emptyNode
   if p.tok.kind != tkColonColon:
     return p.emptyNode
 
@@ -318,7 +319,7 @@ proc parseEvent(p: var Parser): Node =
   eat(p, tkColon)
 
   if p.tok.kind != tkString:
-    p.error(errTokenExpected, tkString)
+    p.error(errTokenExpected, tkString.toString(), toString(p.tok.kind))
 
   let rawCode = parseStringNode(p)
   result = newNodeP(p, nkEvent, name, rawCode)
@@ -370,7 +371,7 @@ proc parseViewBody(p: var Parser): Node =
         addSon(result, list)
       of tkEof:
         break
-      else: p.error(errInvalidToken, p.tok.kind)
+      else: p.error(errInvalidToken, toString(p.tok.kind))
 
 proc parseView(p: var Parser): Node =
   let name    = parseName(p)
@@ -433,7 +434,7 @@ proc parseTime(p: var Parser): Node =
   of tkNumber: result = newUIntNodeP(p)
   of tkFloat: result = newFloatNodeP(p)
   else:
-    p.error(errTokenExpected, "number")
+    p.error(errTokenExpected, "number", toString(p.tok.kind))
   p.getTok()
 
 proc parseAnim(p: var Parser): Node =
@@ -473,7 +474,7 @@ proc parseAnimBody(p: var Parser): Node =
         addSon(result, anim)
       of tkEof:
         break
-      else: p.error(errInvalidToken, p.tok.kind)
+      else: p.error(errInvalidToken, toString(p.tok.kind))
 
 proc parseAnimList(p: var Parser): Node =
   p.getTok()
@@ -511,7 +512,7 @@ proc parseTopLevel(p: var Parser): Node =
   of tkPercent: result = parseAnimList(p)
   of tkAlias: result = parseAliasList(p)
   else:
-    p.error(errInvalidToken, p.tok.kind)
+    p.error(errInvalidToken, toString(p.tok.kind))
 
 proc parseAll*(p: var Parser): Node =
   result = newNodeP(p, nkStmtList)

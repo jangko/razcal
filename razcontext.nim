@@ -115,7 +115,7 @@ const
     errInvalidIndentation: "invalid indentation",
     errExprExpected: "expr expected",
     errIdentExpected: "ident expected",
-    errTokenExpected: "token expected: $1",
+    errTokenExpected: "token expected: $1, not $2",
     errSourceEndedUnexpectedly: "source ended unexpectedly",
     errInvalidExpresion: "invalid expression",
     errOnlyAsgnAllowed: "only assignment allowed here",

@@ -174,20 +174,7 @@ proc semEventList(lay: Layout, n: Node) =
       lay.sourceError(errUndefinedEvent, ev[0], ev[0].ident)
 
 proc semPropList(lay: Layout, n: Node) =
-  let view = lay.lastView
-  for prop in n.sons:
-    ensure(prop.kind == nkProp)
-    ensure(prop[0].kind == nkIdent)
-    let id = toKeyword(prop[0])
-    if id notin validProps:
-      lay.sourceError(errUndefinedProp, prop[0], prop[0].ident)
-
-    case id
-    of wVisible:
-      let val = toKeyWord(prop[1])
-      view.visible = val == wTrue
-    else:
-      discard
+  discard
 
 proc semViewBody(lay: Layout, n: Node): Node =
   ensure(n.kind in {nkStmtList, nkEmpty})
@@ -225,8 +212,13 @@ proc semView(lay: Layout, n: Node) =
 proc subst(lay: Layout, n: Node, cls: ClassContext): Node =
   # substitute node with param symNode
   case n.kind
-  of NodeWithSons:
+  of NodeWithSons - {nkProp}:
     for i in 0.. <n.len:
+      n[i] = lay.subst(n[i], cls)
+    result = n
+  of nkProp:
+    # do not replace lhs
+    for i in 1.. <n.len:
       n[i] = lay.subst(n[i], cls)
     result = n
   of nkIdent:
@@ -518,11 +510,15 @@ proc findRelation(lay: Layout, n: Node, id: SpecialWords, idx = 1, useBracket = 
     if idx >= 0 and idx < result.children.len: return result.children[idx]
 
   # find among siblings
-  if result.isNil and lay.lastView.parent != nil:
-    result = lay.lastView.parent.views.getOrDefault(n.ident)
-    if result != nil and useBracket:
-      if idx < 0 and result.children.len > 0: return result.children[^1]
-      if idx >= 0 and idx < result.children.len: return result.children[idx]
+  if result.isNil:
+    var view = lay.lastView.parent
+    while view != nil:
+      result = view.views.getOrDefault(n.ident)
+      if result != nil and useBracket:
+        if idx < 0 and result.children.len > 0: return result.children[^1]
+        if idx >= 0 and idx < result.children.len: return result.children[idx]
+      if result != nil: return result
+      view = view.parent
 
 proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): Node =
   # here we try to validate an term
@@ -546,6 +542,7 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
         if choiceMode: return lay.emptyNode
         else: lay.sourceError(errRelationNotFound, n, n.ident, lay.lastView.name)
       view.dependencies.incl(lay.lastView)
+      lay.lastView.dependencies.incl(view)
       result = view.symNode
   of nkDotCall:
     let tempView = lay.lastView
@@ -560,15 +557,22 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
     result = n[1]
   of nkBracketExpr:
     ensure(n.len == 2)
-    ensure(n[0].kind == nkIdent)
-    let id = toKeyWord(n[0])
+    ensure(n[0].kind in {nkIdent, nkDotCall})
+    let node = if n[0].kind == nkIdent: n[0] else: n[0][^1]
+    let id = toKeyWord(node)
     if id in flexRel:
       let idx  = lay.computeIdx(n[1])
-      let view = lay.findRelation(n[0], id, idx, true)
+      let tempView = lay.lastView
+      if n[0].kind == nkDotCall:
+        n[0] = lay.resolveTerm(n[0][0], node.ident, choiceMode)
+        lay.lastView = n[0].sym.view
+      let view = lay.findRelation(node, id, idx, true)
+      lay.lastView = tempView
       if view.isNil:
         if choiceMode: return lay.emptyNode
         else: lay.sourceError(errWrongRelationIndex, n[1], idx)
       view.dependencies.incl(lay.lastView)
+      lay.lastView.dependencies.incl(view)
       result = view.symNode
     else:
       lay.sourceError(errUndefinedRel, n[0], n[0].ident)
@@ -990,7 +994,26 @@ proc secEventList(lay: Layout, n: Node) =
   discard
 
 proc secPropList(lay: Layout, n: Node) =
-  discard
+  let view = lay.lastView
+  for prop in n.sons:
+    ensure(prop.kind == nkProp)
+    if prop[0].kind != nkIdent:
+      lay.sourceError(errTokenExpected, prop[0], "identifier", prop[0].kind)
+
+    let id = toKeyword(prop[0])
+    if id notin validProps:
+      lay.sourceError(errUndefinedProp, prop[0], prop[0].ident)
+
+    case id
+    of wVisible:
+      let val = toKeyWord(prop[1])
+      view.visible = val == wTrue
+    of wContent:
+      if prop[1].kind != nkString:
+        lay.sourceError(errTokenExpected, prop[1], "string", prop[1].kind)
+      view.content = prop[1].strVal
+    else:
+      discard
 
 proc secViewBody(lay: Layout, n: Node) =
   ensure(n.kind in {nkStmtList, nkEmpty})
@@ -1103,6 +1126,7 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
     lay.secViewClass(m[1])
     dependencies.excl(m[0].sym.view)
 
+  dependencies.excl(lay.root)
   for v in dependencies:
     lay.sourceError(errNeedToParticipate, aniNode, lay.getName(v), aniNode.ident)
     break
