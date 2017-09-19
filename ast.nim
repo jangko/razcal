@@ -22,13 +22,14 @@ type
     name*: Ident                # view's name
     idx*: int                   # index into children position/-1 if invalid
     symNode*: Node
-    body*: Node
+    node*: Node
     dependencies*: HashSet[View]
     visible*: bool
     content*: string
 
   Anim* = ref object
     view*: View
+    classList*: Node
     interpolator*: Interpolator
     startAni*: float64
     duration*: float64
@@ -321,3 +322,5 @@ proc newScope*(parent: Scope): Scope =
   result.depthLevel = parent.depthLevel + 1
   result.symbols = initSet[Symbol]()
   result.parent = parent
+
+proc `$`*(view: View): string = $view.name

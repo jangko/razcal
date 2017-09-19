@@ -66,7 +66,7 @@ proc newLayout*(id: int, context: RazContext): Layout =
   let n = newIdentNode(root)
   result.root = newView(root)
   result.root.symNode = newViewSymbol(n, result.root).newSymbolNode()
-  result.root.body = result.emptyNode
+  result.root.node = newTree(nkView, result.root.symNode, result.emptyNode, result.emptyNode)
   result.root.visible = false
   result.solver.setBasicConstraint(result.root)
 
@@ -201,7 +201,7 @@ proc semView(lay: Layout, n: Node) =
     let son = n[0].sons[1]
     if son.kind == nkIdent: lastIdent = son
   n[0] = lay.semViewName(n[0], lastIdent)
-  n[0].sym.view.body = n[2] #we only need body for next phase
+  n[0].sym.view.node = n
 
   # at this point, the view already created
   # and n[0] already replaced with a symbolNode
@@ -373,7 +373,7 @@ proc instClass(lay: Layout, n: Node, cls: ClassContext, params: Node): Node =
   else:
     internalError(lay, errUnknownNode, n.kind)
 
-proc instantiateClass(lay: Layout, cls: ClassContext, params: Node): Node =
+proc instantiateClass(lay: Layout, cls: ClassContext, params: Node) =
   # copy only the class body which is essentialy
   # has the same structure with view body
   # then instantiate it
@@ -383,7 +383,6 @@ proc instantiateClass(lay: Layout, cls: ClassContext, params: Node): Node =
 
   # don't forget to check instantiated class
   lay.secViewbody(n)
-  result = n
 
 proc instantiateArg(lay: Layout, n: Node): Node =
   case n.kind
@@ -407,8 +406,10 @@ proc secViewClass(lay: Layout, n: Node) =
     ensure(vc.len == 2)
     let name = vc.sons[0]
     let params = lay.instantiateArg(vc.sons[1])
-    ensure(name.kind == nkIdent)
-    let classSymbol = lay.classTbl.getOrDefault(name.ident)
+    ensure(name.kind in {nkIdent, nkSymbol})
+    let classSymbol = if name.kind == nkIdent:
+        lay.classTbl.getOrDefault(name.ident)
+      else: name
     if classSymbol.isNil:
       lay.sourceError(errClassNotFound, name, name.ident.s)
     # mark it as used
@@ -419,7 +420,7 @@ proc secViewClass(lay: Layout, n: Node) =
     let classParams = class.n[1]
     lay.checkParamCountMatch(params, classParams)
     # replace param(s) with intantiated class
-    vc.sons[1] = lay.instantiateClass(class, params)
+    lay.instantiateClass(class, params)
 
 proc selectViewProp(lay: Layout, view: View, id: SpecialWords): Variable =
   case id
@@ -1052,6 +1053,8 @@ proc resolveView(lay: Layout, n: Node, parent: View): Node =
     ensure(n[0].kind == nkSymbol)
     n[1] = lay.resolveView(n[1], n[0].sym.view)
     result = n[1]
+  of nkSymbol:
+    result = n
   else:
     internalError(lay, errUnknownNode, n.kind)
 
@@ -1062,18 +1065,7 @@ proc getName(lay: Layout, view: View): string =
     result = $v.name & "." & result
     v = v.parent
 
-proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
-  lay.solver = ani.solver
-  var dependencies = initSet[View]()
-
-  let dest = newVarSet(lay.root.name)
-  dest.setConstraint(ani.solver)
-  lay.root.current = dest
-  ani.solver.addConstraint(dest.top == 0)
-  ani.solver.addConstraint(dest.left == 0)
-  ani.solver.addConstraint(dest.width == screenWidth)
-  ani.solver.addConstraint(dest.height == screenHeight)
-
+proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies, participated: var HashSet[View]) =
   for m in n.sons:
     ensure(m.kind == nkAnim)
     let symNode = lay.resolveView(m[0], lay.root)
@@ -1082,6 +1074,7 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
     let destination = newVarSet(view.name)
     destination.setConstraint(ani.solver)
     dependencies.incl(view.dependencies)
+    participated.incl(view)
     view.current = destination
     var startAni, endAni: float64
 
@@ -1115,21 +1108,42 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
       lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
 
     let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, duration: endAni - startAni,
-      destination: destination, current: newVarSet(view.name))
+      destination: destination, current: newVarSet(view.name), classList: m[1])
     ani.anims.add(anim)
 
-  for m in n.sons:
-    let view = m[0].sym.view
-    lay.lastView = view
-    let body = view.body.copyTree
-    lay.secViewBody(body)
-    lay.secViewClass(m[1])
-    dependencies.excl(m[0].sym.view)
+proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
+  lay.solver = ani.solver
+  var dependencies = initSet[View]()
+  var participated = initSet[View]()
+  var nextDep = initSet[View]()
 
-  dependencies.excl(lay.root)
-  for v in dependencies:
-    lay.sourceError(errNeedToParticipate, aniNode, lay.getName(v), aniNode.ident)
-    break
+  let dest = newVarSet(lay.root.name)
+  dest.setConstraint(ani.solver)
+  lay.root.current = dest
+  ani.solver.addConstraint(dest.top == 0)
+  ani.solver.addConstraint(dest.left == 0)
+  ani.solver.addConstraint(dest.width == screenWidth)
+  ani.solver.addConstraint(dest.height == screenHeight)
+  participated.incl(lay.root)
+
+  var node = n
+  while true:
+    lay.processAnimAux(aniNode, node, ani, nextDep, participated)
+    dependencies.incl(nextDep)
+    dependencies.excl(participated)
+    if dependencies.len == 0: break
+    nextDep.clear()
+    node = newNode(nkStmtList)
+    for view in dependencies:
+      let anim = newTree(nkAnim, view.node[0], view.node[1], lay.emptyNode, lay.emptyNode, lay.emptyNode)
+      addSon(node, anim)
+
+  for anim in ani.anims:
+    let view = anim.view
+    lay.lastView = view
+    let body = view.node[2].copyTree
+    lay.secViewBody(body)
+    lay.secViewClass(anim.classList)
 
   ani.solver.updateVariables()
 
