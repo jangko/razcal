@@ -19,6 +19,7 @@ type
     binaryPath: string         # app path
     lua: lua_State
     interpolator: Table[Ident, Interpolator]
+    easing: Table[Ident, EasingFN]
 
   MsgKind* = enum
     # lexer's errors
@@ -177,9 +178,13 @@ proc openRazContext*(): RazContext =
   result.binaryPath = getAppDir()
   result.lua = newNimLua()
   result.interpolator = initTable[Ident, Interpolator]()
+  result.easing = initTable[Ident, EasingFN]()
 
-  for c in easingList:
+  for c in interpolatorList:
     result.interpolator[result.identCache.getIdent(c[0])] = c[1]
+    
+  for c in easingList:
+    result.easing[result.identCache.getIdent(c[0])] = c[1]
 
 proc close*(ctx: RazContext) =
   ctx.lua.close()

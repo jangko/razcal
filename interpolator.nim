@@ -125,7 +125,7 @@ template easing(name, eq: untyped) =
   proc name*(origin, destination, t: float): float =
     result = origin + (destination - origin) * eq(t)
 
-  proc `interpolate name`*(origin, destination, current: VarSet, t: float64) =
+  proc `interpolator name`*(origin, destination, current: VarSet, t: float64) =
     current.top.value = name(origin.top.value, destination.top.value, t)
     current.left.value = name(origin.left.value, destination.left.value, t)
     current.right.value = name(origin.right.value, destination.right.value, t)
@@ -136,13 +136,16 @@ template easing(name, eq: untyped) =
     current.centerY.value = name(origin.centerY.value, destination.centerY.value, t)
 
 macro createInterpolator(n: untyped): untyped =
-  var tbl = "const easingList* = {\n"
+  var iTbl = "const interpolatorList* = {\n"
+  var eTbl = "const easingList* = {\n"
   var glue = ""
   for m in n:
     glue.add "easing(easing$1, $1)\n" % [$m]
-    tbl.add "  \"$1\": interpolateEasing$1,\n" % [$m]
-  tbl.add "  }\n"
-  result = parseStmt(glue & tbl)
+    iTbl.add "  \"$1\": interpolatorEasing$1,\n" % [$m]
+    eTbl.add "  \"$1\": easing$1,\n" % [$m]
+  iTbl.add "  }\n"
+  eTbl.add "  }\n"
+  result = parseStmt(glue & iTbl & eTbl)
 
 createInterPolator:
   linearInterpolation

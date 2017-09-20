@@ -232,8 +232,13 @@ proc drawView*(view: View, nvg: NVGContext) =
   let red = nvgRGBA(128,16,8,255)
 
   if view.visible:
+    nvg.save()
+    nvg.translate(view.getCenterX(), view.getCenterY())
+    nvg.rotate(nvgDegToRad(view.rotate))
+    nvg.translate(-view.getCenterX(), -view.getCenterY())
     nvg.drawButton(view.getLeft(), view.getTop(),
       view.getWidth(), view.getHeight(), red, view.content)
+    nvg.restore()
 
   for child in view.children:
     child.drawView(nvg)
@@ -251,8 +256,9 @@ proc main =
   let lay = ctx.loadMainScript()
   if lay == nil: return
 
+
   glfw.init()
-  var w = newGlWin(dim = (w: screenWidth, h: screenHeight), nMultiSamples = 4)
+  var w = newGlWin(dim = (w: screenWidth, h: screenHeight), nMultiSamples = 6)
   w.makeContextCurrent()
   load_glex()
   opengl.loadExtensions()
@@ -309,14 +315,17 @@ proc main =
       for a in anim.anims:
         a.interpolator(a.view.origin, a.destination, a.current, 0.0)
         a.view.current = a.current
+        a.view.rotate = 0.0
     of ANIM_RUN:
+      nvg.beginFrame(s.w.cint, s.h.cint, 1.0)
+
       let elapsed = getTime() - startTime
       for a in anim.anims:
         if elapsed >= a.startAni:
           let timeCurve = (elapsed - a.startAni) / a.duration
           a.interpolator(a.view.origin, a.destination, a.current, timeCurve)
+          a.view.rotate = easingLinearInterpolation(0, 270, timeCurve)
 
-      nvg.beginFrame(s.w.cint, s.h.cint, 1.0)
       lay.root.drawView(nvg)
       nvg.endFrame()
       w.swapBufs()

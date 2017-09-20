@@ -1,7 +1,9 @@
 import sets, idents, strutils, kiwi, tables, sets, types
 
 type
-  Interpolator* = proc (origin, destination, current: VarSet, t: float64)
+  EasingFN* = proc(origin, destination, t: float): float {.nimcall.}
+  Interpolator* = proc (origin, destination, current: VarSet, t: float64) {.nimcall.}
+  PivotFN = proc(view: View): float64 {.nimcall.}
 
   Scope* = ref object
     depthLevel*: int
@@ -26,6 +28,11 @@ type
     dependencies*: HashSet[View]
     visible*: bool
     content*: string
+    rotate*: float64
+    pivotX: View
+    pivotY: View
+    pivotX_fn: PivotFN
+    pivotY_fn: PivotFN
 
   Anim* = ref object
     view*: View

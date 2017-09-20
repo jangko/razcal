@@ -379,7 +379,7 @@ proc nvgTransformPremultiply*(dst: ptr cfloat; src: ptr cfloat) {.nvg.}
 proc nvgTransformInverse*(dst: ptr cfloat; src: ptr cfloat): cint {.nvg.}
 
 # Transform a point by given transform.
-proc nvgTransformPoint*(dstx, dsty, xform: ptr cfloat; srcx, srcy: cfloat) {.nvg.}
+proc nvgTransformPoint*(dstx, dsty: var cfloat, xform: ptr cfloat; srcx, srcy: cfloat) {.nvg.}
 
 # Converts degrees to radians and vice versa.
 proc nvgDegToRad*(deg: cfloat): cfloat {.nvg.}

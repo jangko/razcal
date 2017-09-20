@@ -37,8 +37,8 @@ proc setConstraint*(self: VarSet, solver: Solver) =
   solver.addConstraint(self.bottom == self.top + self.height)
   solver.addConstraint(self.right >= self.left)
   solver.addConstraint(self.bottom >= self.top)
-  solver.addConstraint(self.centerX == (self.right - self.left) / 2)
-  solver.addConstraint(self.centerY == (self.bottom - self.top) / 2)
+  solver.addConstraint(self.centerX == self.left + (self.right - self.left) / 2)
+  solver.addConstraint(self.centerY == self.top + (self.bottom - self.top) / 2)
 
 proc setBasicConstraint*(solver: Solver, view: View) =
   view.origin.setConstraint(solver)
@@ -55,34 +55,34 @@ proc setOrigin*(view: View, origin: VarSet) =
 proc getChildren*(view: View): seq[View] =
   view.children
 
-template getName*(view: View): string =
+proc getName*(view: View): string =
   view.name.s
 
-template getTop*(view: View): float64 =
+proc getTop*(view: View): float64 =
   view.current.top.value
 
-template getLeft*(view: View): float64 =
+proc getLeft*(view: View): float64 =
   view.current.left.value
 
-template getRight*(view: View): float64 =
+proc getRight*(view: View): float64 =
   view.current.right.value
 
-template getBottom*(view: View): float64 =
+proc getBottom*(view: View): float64 =
   view.current.bottom.value
 
-template getWidth*(view: View): float64 =
+proc getWidth*(view: View): float64 =
   view.current.width.value
 
-template getHeight*(view: View): float64 =
+proc getHeight*(view: View): float64 =
   view.current.height.value
 
-template getCenterX*(view: View): float64 =
+proc getCenterX*(view: View): float64 =
   view.current.centerX.value
 
-template getCenterY*(view: View): float64 =
+proc getCenterY*(view: View): float64 =
   view.current.centerY.value
 
-template getParent*(view: View): View =
+proc getParent*(view: View): View =
   view.parent
 
 proc getPrev*(view: View): View =
@@ -121,3 +121,28 @@ proc newAnimation*(duration: float64): Animation =
   result.duration = duration
   result.anims = @[]
   result.solver = newSolver()
+
+# procs this needed for pivot mechanism
+proc viewGetTop*(view: View): float64 =
+  view.current.top.value
+
+proc viewGetLeft*(view: View): float64 =
+  view.current.left.value
+
+proc viewGetRight*(view: View): float64 =
+  view.current.right.value
+
+proc viewGetBottom*(view: View): float64 =
+  view.current.bottom.value
+
+proc viewGetWidth*(view: View): float64 =
+  view.current.width.value
+
+proc viewGetHeight*(view: View): float64 =
+  view.current.height.value
+
+proc viewGetCenterX*(view: View): float64 =
+  view.current.centerX.value
+
+proc viewGetCenterY*(view: View): float64 =
+  view.current.centerY.value
