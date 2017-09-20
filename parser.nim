@@ -302,6 +302,8 @@ proc parseFlexList(p: var Parser): Node =
     while sameInd(p):
       while true:
         p.optPar()
+        if p.currInd == -1 and p.tok.indent >= 0:
+          p.error(errInvalidIndentation)
         let n = parseFlex(p)
         # if no more flex, we finish here
         if n.kind == nkEmpty: return result
@@ -350,7 +352,13 @@ proc parsePropList(p: var Parser): Node =
   result = newNodeP(p, nkPropList)
   withInd(p):
     while sameInd(p):
-      addSon(result, parseProp(p))
+      while true:
+        p.optPar()
+        if p.currInd == -1 and p.tok.indent >= 0:
+          p.error(errInvalidIndentation)
+        addSon(result, parseProp(p))
+        if p.tok.kind == tkSemiColon: p.getTok()
+        else: break
 
 proc parseViewBody(p: var Parser): Node =
   if p.tok.indent <= p.currInd:

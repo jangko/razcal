@@ -52,7 +52,7 @@ const
     "program", "style", "alias", "flex", "event", "prop"]
 
 proc toString*(kind: TokenKind): string =
-  result = "`" & TokenKindToStr[kind] & "`"
+  result = TokenKindToStr[kind]
 
 const
   Tabulator* = '\x09'
