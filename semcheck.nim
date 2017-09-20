@@ -1,5 +1,5 @@
 import ast, layout, idents, kiwi, tables, razcontext, hashes, strutils
-import nimLUA, keywords, sets, interpolator, types
+import nimLUA, keywords, sets, interpolator, types, nvg
 
 const
   screenWidth* = 800
@@ -7,7 +7,7 @@ const
 
 type
   Layout* = ref object of IDobj
-    root*: View                   # every layout/scene root
+    root*: View                  # every layout/scene root
     classTbl: Table[Ident, Node] # string to SymbolNode.skClass
     aliasTbl: Table[Ident, Node]
     animTbl: Table[Ident, Node]
@@ -424,9 +424,9 @@ proc secViewClass(lay: Layout, n: Node) =
 
 proc selectViewProp(lay: Layout, view: View, id: SpecialWords): Variable =
   case id
-  of wLeft: result = view.current.left
+  of wLeft, wX: result = view.current.left
   of wRight: result = view.current.right
-  of wTop: result = view.current.top
+  of wTop, wY: result = view.current.top
   of wBottom: result = view.current.bottom
   of wWidth: result = view.current.width
   of wHeight: result = view.current.height
@@ -994,6 +994,54 @@ proc secFlexList(lay: Layout, n: Node) =
 proc secEventList(lay: Layout, n: Node) =
   discard
 
+proc colorElemClamp[T](color: var openArray[T], n: Node, len: int) =
+  let len = min(3, n.len)
+  for i in 0.. <len:
+    if n[i].kind in {nkInt, nkFloat}:
+      color[i] = T(toNumber(n[i]))
+      when T is int:
+        if color[i] < 0: color[i] = 0
+        if color[i] > 255: color[i] = 255
+      else:
+        if color[i] < 0.0: color[i] = 0.0
+        if color[i] > 1.0: color[i] = 1.0
+
+proc colorElem[T](color: var openArray[T], n: Node, len: int) =
+  let len = min(3, n.len)
+  for i in 0.. <len:
+    if n[i].kind in {nkInt, nkFloat}:
+      color[i] = T(toNumber(n[i]))
+
+proc semColor(lay: Layout, n: Node): NVGColor =
+  if n.kind != nkCall: return result
+  if n[0].kind != nkIdent: return result
+  let id = toKeyWord(n[0])
+  let args = n[1]
+  var argf: array[4, float]
+  var argi: array[4, int]
+
+  case id
+  of wRgb:
+    colorElemClamp(argi, args, 3)
+    result = nvgRGB(argi[0].uint8, argi[1].uint8, argi[2].uint8)
+  of wRgba:
+    colorElemClamp(argi, args, 4)
+    result = nvgRGBA(argi[0].uint8, argi[1].uint8, argi[2].uint8, argi[3].uint8)
+  of wRgbf:
+    colorElemClamp(argf, args, 3)
+    result = nvgRGBf(argf[0], argf[1], argf[2])
+  of wRgbaf:
+    colorElemClamp(argf, args, 4)
+    result = nvgRGBAf(argf[0], argf[1], argf[2], argf[3])
+  of wHsl:
+    colorElem(argf, args, 3)
+    result = nvgHSL(argf[0], argf[1], argf[2])
+  of wHsla:
+    colorElem(argf, args, 4)
+    result = nvgHSLA(argf[0], argf[1], argf[2], uint8(int(argf[3])))
+  else:
+    return result
+
 proc secPropList(lay: Layout, n: Node) =
   let view = lay.lastView
   for prop in n.sons:
@@ -1013,6 +1061,9 @@ proc secPropList(lay: Layout, n: Node) =
       if prop[1].kind != nkString:
         lay.sourceError(errTokenExpected, prop[1], "string", prop[1].kind)
       view.content = prop[1].strVal
+    of wBgColor:
+      view.bgColor = lay.semColor(prop[1])
+    of wBorderColor: view.borderColor = lay.semColor(prop[1])
     else:
       discard
 
@@ -1107,8 +1158,9 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
     if interpolator.isNil:
       lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
 
+    let easing = lay.context.getEasing(interpolatorName)
     let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, duration: endAni - startAni,
-      destination: destination, current: newVarSet(view.name), classList: m[1])
+      destination: destination, current: newVarSet(view.name), classList: m[1], easing: easing)
     ani.anims.add(anim)
 
 proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =

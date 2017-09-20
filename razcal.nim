@@ -229,7 +229,7 @@ proc drawButton(nvg: NVGContext, x, y, w, h: float64, col: NVGcolor, text: strin
     discard nvg.text(x+w*0.5-tw*0.5,y+h*0.5,text)
 
 proc drawView*(view: View, nvg: NVGContext) =
-  let red = nvgRGBA(128,16,8,255)
+  let red = view.bgColor
 
   if view.visible:
     nvg.save()
@@ -324,7 +324,7 @@ proc main =
         if elapsed >= a.startAni:
           let timeCurve = (elapsed - a.startAni) / a.duration
           a.interpolator(a.view.origin, a.destination, a.current, timeCurve)
-          a.view.rotate = easingLinearInterpolation(0, 270, timeCurve)
+          a.view.rotate = a.easing(0, 270, timeCurve)
 
       lay.root.drawView(nvg)
       nvg.endFrame()

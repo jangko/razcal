@@ -55,13 +55,13 @@ documentation none, tutorial none.
 
 * parser
   * ~parse comma separated constraint~
-  * parse animation description
+  * ~parse animation description~
     * ~tkPercent(%) tkIdent(name) tkNumber(duration)~
     * ~widget(::class)* tkNumber(start_ani) tkNumber(end_ani) tkIdent(interpolator)~
-  * parse functional constraint
+  * ~parse functional constraint~
   * parse conditional constraint
-  * parse style section
-  * parse prop section
+  * ~parse style section~
+  * ~parse prop section~
 * semantic pass
   * ~class instantiation~
     * ~collecting param~
@@ -80,8 +80,8 @@ documentation none, tutorial none.
     * ~after animation ended: discard origin, put destination to origin~
     * ~animation clock~
   * applying functional constraint
-  * applying prop to view
-  * applying style to view
+  * ~applying prop to view~
+  * ~applying style to view~
   * exposing events to lua
 * lua binding
   * ~fix cfunction argument validation~

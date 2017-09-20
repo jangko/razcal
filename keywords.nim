@@ -22,11 +22,14 @@ type
     # view's basic constraint field
     # must be keep in sync with flexProp
     wLeft, wRight, wTop, wBottom
-    wWidth, wHeight, wCenterX, wCenterY
+    wWidth, wHeight, wX, wY, wCenterX, wCenterY
 
     # view's basic prop
     wContent, wTitle, wZindex, wOverflow
+    wBgColor, wBorderColor
     wVisible, wMultiline, wLink, wImg, wIcon
+
+    wRgb, wRgbf, wRgba, wRgbaf, wHsl, wHsla
 
     # view's basic mouse events
     wClick, wContextMenu, wDblClick, wMouseDown
@@ -63,10 +66,13 @@ const
 
     "this", "root", "parent", "child", "prev", "next",
     "left", "right", "top", "bottom",
-    "width", "height", "centerX", "centerY",
+    "width", "height", "x", "y", "centerX", "centerY",
 
     "content", "title", "zindex", "overflow",
+    "bgColor", "borderColor",
     "visible", "multiline", "link", "img", "icon",
+
+    "rgb", "rgbf", "rgba", "rgbaf", "hsl", "hsla",
 
     "click", "contextMenu", "dblClick", "mouseDown",
     "mouseEnter", "mouseLeave", "mouseMove", "mouseOver",
@@ -86,10 +92,10 @@ const
     "true", "false",
   ]
 
-  flexOpr* = {wEquals, wGreaterOrEqual, wLessOrEqual}
+  flexOpr* = {wEquals..wLessOrEqual}
   flexRel* = {wThis..wNext}
   flexProp* = {wLeft..wCenterY}
-  flexBinaryTermOp* = {wPlus, wMinus, wMul, wDiv}
+  flexBinaryTermOp* = {wPlus..wDiv}
   flexUnaryTermOp* = {wMinus}
 
   validEvents* = {wClick..wOnDrop}

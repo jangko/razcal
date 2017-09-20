@@ -89,6 +89,7 @@ proc close*(p: var Parser) =
   p.lex.close()
 
 proc parseExpr(p: var Parser, minPrec: int, prev = Node(nil)): Node
+proc parseArgs(p: var Parser): Node
 
 proc parseIdentChain(p: var Parser, prev: Node): Node =
   result = prev
@@ -124,6 +125,9 @@ proc parseNameResolution(p: var Parser): Node =
       p.error(errClosingBracketExpected)
     p.getTok()
     result = newNodeP(p, nkBracketExpr, result, idxExpr)
+  elif p.tok.kind == tkParLe:
+    let args = parseArgs(p)
+    result = newNodeP(p, nkCall, result, args)
 
 proc parseNameChain(p: var Parser): Node =
   result = parseNameResolution(p)
@@ -144,7 +148,6 @@ proc primary(p: var Parser): Node =
     p.getTok()
   of tkEof:
     result = p.emptyNode
-    #p.error(errSourceEndedUnexpectedly)
   of tkOpr:
     let a = newIdentNodeP(p)
     p.getTok()
@@ -209,9 +212,8 @@ proc parseExpr(p: var Parser, minPrec: int, prev = Node(nil)): Node =
     else:
       result = newNodeP(p, nkInfix, opNode, result, rhs)
 
-proc parseViewClassArgs(p: var Parser): Node =
-  result = newNodeP(p, nkViewParam)
-  p.getTok()
+proc parseArgs(p: var Parser): Node =
+  result = newNodeP(p, nkArgs)
   if p.tok.kind == tkParLe and p.tok.indent < 0:
     p.getTok()
     p.optInd()
@@ -234,7 +236,8 @@ proc parseViewClass(p: var Parser): Node =
   if p.tok.kind != tkIdent:
     p.error(errIdentExpected)
   let name = newIdentNodeP(p)
-  let args = parseViewClassArgs(p)
+  p.getTok()
+  let args = parseArgs(p)
   result = newNodeP(p, nkViewClass, name, args)
 
 proc parseViewClassList(p: var Parser): Node =

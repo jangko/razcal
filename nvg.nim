@@ -212,7 +212,7 @@ proc globalCompositeBlendFuncSeparate*(ctx: NVGContext, srcRGB, dstRGB, srcAlpha
 #
 # Colors in NanoVG are stored as unsigned ints in ABGR format.
 # Returns a color value from red, green, blue values. Alpha will be set to 255 (1.0f).
-proc nvgRGB*(r, g, b: cuchar): NVGcolor {.nvg.}
+proc nvgRGB*(r, g, b: uint8): NVGcolor {.nvg.}
 
 # Returns a color value from red, green, blue values. Alpha will be set to 1.0f.
 proc nvgRGBf*(r, g, b: cfloat): NVGcolor {.nvg.}
@@ -238,7 +238,7 @@ proc nvgHSL*(H, S, L: cfloat): NVGcolor {.nvg.}
 
 # Returns color value specified by hue, saturation and lightness and alpha.
 # HSL values are all in range [0..1], alpha in range [0..255]
-proc nvgHSLA*(H, S, L: cfloat; a: cuchar): NVGcolor {.nvg.}
+proc nvgHSLA*(H, S, L: cfloat; a: uint8): NVGcolor {.nvg.}
 
 
 # State Handling

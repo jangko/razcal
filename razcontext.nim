@@ -182,7 +182,7 @@ proc openRazContext*(): RazContext =
 
   for c in interpolatorList:
     result.interpolator[result.identCache.getIdent(c[0])] = c[1]
-    
+
   for c in easingList:
     result.easing[result.identCache.getIdent(c[0])] = c[1]
 
@@ -302,3 +302,6 @@ proc toString*(ctx: RazContext, info: RazLineInfo): string =
 
 proc getInterpolator*(ctx: RazContext, ident: Ident): Interpolator {.inline.} =
   result = ctx.interpolator.getOrDefault(ident)
+
+proc getEasing*(ctx: RazContext, ident: Ident): EasingFN {.inline.} =
+  result = ctx.easing.getOrDefault(ident)

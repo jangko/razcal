@@ -1,9 +1,9 @@
-import sets, idents, strutils, kiwi, tables, sets, types
+import sets, idents, strutils, kiwi, tables, sets, types, nvg
 
 type
   EasingFN* = proc(origin, destination, t: float): float {.nimcall.}
   Interpolator* = proc (origin, destination, current: VarSet, t: float64) {.nimcall.}
-  PivotFN = proc(view: View): float64 {.nimcall.}
+  PivotFN* = proc(view: View): float64 {.nimcall.}
 
   Scope* = ref object
     depthLevel*: int
@@ -15,6 +15,11 @@ type
     width*, height*: kiwi.Variable
     centerX*, centerY*: kiwi.Variable
 
+  PropSep* = ref object
+    rotate*: float64
+    bgColor*, borderColor*: NVGColor
+    pivotX*, pivotY*: Node      # transform origin, calculated on the fly
+
   View* = ref object
     origin*: VarSet
     current*: VarSet
@@ -24,15 +29,13 @@ type
     name*: Ident                # view's name
     idx*: int                   # index into children position/-1 if invalid
     symNode*: Node
-    node*: Node
+    node*: Node                 # view node
     dependencies*: HashSet[View]
     visible*: bool
     content*: string
     rotate*: float64
-    pivotX: View
-    pivotY: View
-    pivotX_fn: PivotFN
-    pivotY_fn: PivotFN
+    pivotX*, pivotY*: Node      # transform origin, calculated on the fly
+    bgColor*, borderColor*: NVGColor
 
   Anim* = ref object
     view*: View
@@ -42,6 +45,7 @@ type
     duration*: float64
     current*: VarSet
     destination*: VarSet
+    easing*: EasingFN
 
   Animation* = ref object of IDobj
     duration*: float64
@@ -80,7 +84,7 @@ type
 
   NodeKind* = enum
     nkEmpty
-    nkInfix     # a opr b
+    nkInfix     # opr a b
     nkPrefix    # opr n
     nkPostfix   # opr n
 
@@ -90,7 +94,7 @@ type
     nkSymbol    # act as pointer to other node
 
     nkCall        # f(args)
-    nkDotCall     # arg.f
+    nkDotCall     # x.y
     nkAsgn        # n '=' expr
     nkBracketExpr # n[expr]
 
@@ -108,7 +112,7 @@ type
     nkFlexVar     # kiwi.Variable
 
     # class instantiation used by view
-    nkViewClass, nkViewParam
+    nkViewClass, nkArgs
 
     # a view, a class, a style section
     nkView, nkClass, nkStyle
