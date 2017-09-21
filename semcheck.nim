@@ -1,9 +1,11 @@
 import ast, layout, idents, kiwi, tables, razcontext, hashes, strutils
-import nimLUA, keywords, sets, interpolator, types, nvg
+import nimLUA, keywords, sets, interpolator, types, nvg, namedcolors
 
 const
   screenWidth* = 800
   screenHeight* = 600
+  namedColorsStart = ord(high(SpecialWords)) + 1
+  namedColorsEnd = namedColorsStart + NamedColors.len
 
 type
   Layout* = ref object of IDobj
@@ -67,7 +69,7 @@ proc newLayout*(id: int, context: RazContext): Layout =
   result.root = newView(root)
   result.root.symNode = newViewSymbol(n, result.root).newSymbolNode()
   result.root.node = newTree(nkView, result.root.symNode, result.emptyNode, result.emptyNode)
-  result.root.visible = false
+  result.root.curProp.visible = false
   result.solver.setBasicConstraint(result.root)
 
 proc getRoot(lay: Layout): View =
@@ -1013,6 +1015,14 @@ proc colorElem[T](color: var openArray[T], n: Node, len: int) =
       color[i] = T(toNumber(n[i]))
 
 proc semColor(lay: Layout, n: Node): NVGColor =
+  if n.kind == nkIdent:
+    let c = lay.context.getNamedColor(n.ident)
+    let r = uint8((c shr 16) and 0xFF)
+    let g = uint8((c shr 8) and 0xFF)
+    let b = uint8(c and 0xFF)
+    result = nvgRGB(r, g, b)
+    return result
+
   if n.kind != nkCall: return result
   if n[0].kind != nkIdent: return result
   let id = toKeyWord(n[0])
@@ -1056,14 +1066,17 @@ proc secPropList(lay: Layout, n: Node) =
     case id
     of wVisible:
       let val = toKeyWord(prop[1])
-      view.visible = val == wTrue
+      view.curProp.visible = val == wTrue
     of wContent:
       if prop[1].kind != nkString:
         lay.sourceError(errTokenExpected, prop[1], "string", prop[1].kind)
       view.content = prop[1].strVal
     of wBgColor:
-      view.bgColor = lay.semColor(prop[1])
-    of wBorderColor: view.borderColor = lay.semColor(prop[1])
+      view.curProp.bgColor = lay.semColor(prop[1])
+    of wBorderColor:
+      view.curProp.borderColor = lay.semColor(prop[1])
+    of wRotate:
+      view.curProp.rotate = toNumber(prop[1])
     else:
       discard
 
@@ -1123,10 +1136,12 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
     m[0] = symNode
     let view = symNode.sym.view
     let destination = newVarSet(view.name)
+    let destProp = newPropSet(view.oriProp)
     destination.setConstraint(ani.solver)
     dependencies.incl(view.dependencies)
     participated.incl(view)
     view.current = destination
+    view.curProp = destProp
     var startAni, endAni: float64
 
     if m[2].kind == nkEmpty and m[3].kind != nkEmpty:
@@ -1159,8 +1174,16 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
       lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
 
     let easing = lay.context.getEasing(interpolatorName)
-    let anim = Anim(view: view, interpolator: interpolator, startAni: startAni, duration: endAni - startAni,
-      destination: destination, current: newVarSet(view.name), classList: m[1], easing: easing)
+    let anim = Anim(view: view,
+      interpolator: interpolator,
+      startAni: startAni,
+      duration: endAni - startAni,
+      destination: destination,
+      current: newVarSet(view.name),
+      classList: m[1],
+      easing: easing,
+      curProp: newPropSet(view.oriProp),
+      destProp: destProp)
     ani.anims.add(anim)
 
 proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
@@ -1170,8 +1193,10 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
   var nextDep = initSet[View]()
 
   let dest = newVarSet(lay.root.name)
+  let destProp = newPropSet()
   dest.setConstraint(ani.solver)
   lay.root.current = dest
+  lay.root.curProp = destProp
   ani.solver.addConstraint(dest.top == 0)
   ani.solver.addConstraint(dest.left == 0)
   ani.solver.addConstraint(dest.width == screenWidth)

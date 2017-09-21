@@ -26,7 +26,7 @@ type
 
     # view's basic prop
     wContent, wTitle, wZindex, wOverflow
-    wBgColor, wBorderColor
+    wBgColor, wBorderColor, wRotate
     wVisible, wMultiline, wLink, wImg, wIcon
 
     wRgb, wRgbf, wRgba, wRgbaf, wHsl, wHsla
@@ -69,7 +69,7 @@ const
     "width", "height", "x", "y", "centerX", "centerY",
 
     "content", "title", "zindex", "overflow",
-    "bgColor", "borderColor",
+    "bgColor", "borderColor", "rotate",
     "visible", "multiline", "link", "img", "icon",
 
     "rgb", "rgbf", "rgba", "rgbaf", "hsl", "hsla",

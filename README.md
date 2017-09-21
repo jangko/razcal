@@ -70,7 +70,7 @@ documentation none, tutorial none.
     * ~class copying~
     * ~instantiation with or without default argument~
     * ~semcheck~
-  * animation instantiation:
+  * ~animation instantiation:~
     * ~two sets of variables: origin and destination~
       * ~collect who participated in animation~
     * ~two sets of constraint and solver~
@@ -80,17 +80,18 @@ documentation none, tutorial none.
     * ~after animation ended: discard origin, put destination to origin~
     * ~animation clock~
   * applying functional constraint
+  * applying conditional constraint
   * ~applying prop to view~
   * ~applying style to view~
   * exposing events to lua
-* lua binding
+* ~lua binding~
   * ~fix cfunction argument validation~
   * ~reimplement metatable for userdata~
   * ~add error reporting mechanism without using lua_error~
   * ~expose everything in layout to lua safely~
   * ~call lua from nim~
-* renderer
-  * bring up crude renderer to design backend api
+* ~renderer~
+  * ~bring up crude renderer to design backend api~
     * ~test glfw~
     * ~test nanovg on glfw~
     * ~render something from razcal on nanovg~

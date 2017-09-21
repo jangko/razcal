@@ -1,4 +1,4 @@
-import hashes, strutils, keywords
+import hashes, strutils, keywords, namedcolors
 
 type
   IDobj* = ref object of RootObj
@@ -60,3 +60,8 @@ proc newIdentCache*(): IdentCache =
   for s in countup(succ(low(SpecialWords)), high(SpecialWords)):
     let idx = ord(s)
     result.getIdent(specialWords[idx-1], hash(specialWords[idx-1])).id = idx
+
+  var id = ord(high(SpecialWords)) + 1
+  for x in NamedColors:
+    result.getIdent(x[0], hash(x[0])).id = id
+    inc id

@@ -1,4 +1,4 @@
-import strutils, idents, tables, utils
+import strutils, idents, tables, utils, namedcolors
 import nimLUA, types, os, interpolator, ast
 
 var IDSeed {.compileTime.} = 0
@@ -20,6 +20,7 @@ type
     lua: lua_State
     interpolator: Table[Ident, Interpolator]
     easing: Table[Ident, EasingFN]
+    namedColors: Table[Ident, uint32]
 
   MsgKind* = enum
     # lexer's errors
@@ -179,12 +180,16 @@ proc openRazContext*(): RazContext =
   result.lua = newNimLua()
   result.interpolator = initTable[Ident, Interpolator]()
   result.easing = initTable[Ident, EasingFN]()
+  result.namedColors = initTable[Ident, uint32]()
 
   for c in interpolatorList:
     result.interpolator[result.identCache.getIdent(c[0])] = c[1]
 
   for c in easingList:
     result.easing[result.identCache.getIdent(c[0])] = c[1]
+
+  for c in NamedColors:
+    result.namedColors[result.identCache.getIdent(c[0])] = c[1]
 
 proc close*(ctx: RazContext) =
   ctx.lua.close()
@@ -305,3 +310,6 @@ proc getInterpolator*(ctx: RazContext, ident: Ident): Interpolator {.inline.} =
 
 proc getEasing*(ctx: RazContext, ident: Ident): EasingFN {.inline.} =
   result = ctx.easing.getOrDefault(ident)
+
+proc getNamedColor*(ctx: RazContext, ident: Ident): uint32 {.inline.} =
+  result = ctx.namedColors.getOrDefault(ident)

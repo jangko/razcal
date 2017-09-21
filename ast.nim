@@ -15,7 +15,8 @@ type
     width*, height*: kiwi.Variable
     centerX*, centerY*: kiwi.Variable
 
-  PropSep* = ref object
+  PropSet* = ref object
+    visible*: bool
     rotate*: float64
     bgColor*, borderColor*: NVGColor
     pivotX*, pivotY*: Node      # transform origin, calculated on the fly
@@ -31,11 +32,9 @@ type
     symNode*: Node
     node*: Node                 # view node
     dependencies*: HashSet[View]
-    visible*: bool
     content*: string
-    rotate*: float64
-    pivotX*, pivotY*: Node      # transform origin, calculated on the fly
-    bgColor*, borderColor*: NVGColor
+    curProp*: PropSet
+    oriProp*: PropSet
 
   Anim* = ref object
     view*: View
@@ -46,6 +45,8 @@ type
     current*: VarSet
     destination*: VarSet
     easing*: EasingFN
+    curProp*: PropSet
+    destProp*: PropSet
 
   Animation* = ref object of IDobj
     duration*: float64

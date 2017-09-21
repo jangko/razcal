@@ -229,12 +229,12 @@ proc drawButton(nvg: NVGContext, x, y, w, h: float64, col: NVGcolor, text: strin
     discard nvg.text(x+w*0.5-tw*0.5,y+h*0.5,text)
 
 proc drawView*(view: View, nvg: NVGContext) =
-  let red = view.bgColor
+  let red = view.curProp.bgColor
 
-  if view.visible:
+  if view.curProp.visible:
     nvg.save()
     nvg.translate(view.getCenterX(), view.getCenterY())
-    nvg.rotate(nvgDegToRad(view.rotate))
+    nvg.rotate(nvgDegToRad(view.curProp.rotate))
     nvg.translate(-view.getCenterX(), -view.getCenterY())
     nvg.drawButton(view.getLeft(), view.getTop(),
       view.getWidth(), view.getHeight(), red, view.content)
@@ -315,7 +315,7 @@ proc main =
       for a in anim.anims:
         a.interpolator(a.view.origin, a.destination, a.current, 0.0)
         a.view.current = a.current
-        a.view.rotate = 0.0
+        a.view.curProp = a.curProp
     of ANIM_RUN:
       nvg.beginFrame(s.w.cint, s.h.cint, 1.0)
 
@@ -324,7 +324,11 @@ proc main =
         if elapsed >= a.startAni:
           let timeCurve = (elapsed - a.startAni) / a.duration
           a.interpolator(a.view.origin, a.destination, a.current, timeCurve)
-          a.view.rotate = a.easing(0, 270, timeCurve)
+          a.curProp.rotate = a.easing(a.view.oriProp.rotate, a.destProp.rotate, timeCurve)
+          a.curProp.bgColor.r = a.easing(a.view.oriProp.bgColor.r, a.destProp.bgColor.r, timeCurve)
+          a.curProp.bgColor.g = a.easing(a.view.oriProp.bgColor.g, a.destProp.bgColor.g, timeCurve)
+          a.curProp.bgColor.b = a.easing(a.view.oriProp.bgColor.b, a.destProp.bgColor.b, timeCurve)
+          a.curProp.bgColor.a = a.easing(a.view.oriProp.bgColor.a, a.destProp.bgColor.a, timeCurve)
 
       lay.root.drawView(nvg)
       nvg.endFrame()
@@ -332,7 +336,7 @@ proc main =
       if elapsed > anim.duration: animState = ANIM_STOP
     of ANIM_STOP:
       for a in anim.anims:
-        a.view.setOrigin(a.destination)
+        a.view.setOrigin(a.destination, a.destProp)
       animState = ANIM_NONE
     else:
       lay.root.drawView(nvg)

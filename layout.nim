@@ -11,6 +11,24 @@ proc newVarSet*(name: Ident): VarSet =
   result.centerX = newVariable(name.s & ".centerX")
   result.centerY = newVariable(name.s & ".centerY")
 
+proc newPropSet*(): PropSet =
+  new(result)
+  result.visible = true
+  result.rotate = 0.0
+  #result.bgColor
+  #result.borderColor
+  #result.pivotX
+  #result.pivotY
+
+proc newPropSet*(o: PropSet): PropSet =
+  new(result)
+  result.visible = o.visible
+  result.rotate = o.rotate
+  result.bgColor = o.bgColor
+  result.borderColor = o.borderColor
+  result.pivotX = o.pivotX
+  result.pivotY = o.pivotY
+
 proc newView*(name: Ident): View =
   new(result)
   result.origin = newVarSet(name)
@@ -21,8 +39,9 @@ proc newView*(name: Ident): View =
   result.children = @[]
   result.idx = -1
   result.dependencies = initSet[View]()
-  result.visible = true
   result.content = ""
+  result.oriProp = newPropSet()
+  result.curProp = result.oriProp
 
 proc newView*(parent: View, name: Ident): View =
   assert(parent != nil)
@@ -45,12 +64,15 @@ proc setBasicConstraint*(solver: Solver, view: View) =
 
 proc setOrigin*(view: View) =
   view.current = view.origin
+  view.curProp = view.oriProp
   for child in view.children:
     child.setOrigin()
 
-proc setOrigin*(view: View, origin: VarSet) =
+proc setOrigin*(view: View, origin: VarSet, prop: PropSet) =
   view.origin = origin
   view.current = origin
+  view.oriProp = prop
+  view.curProp = prop
 
 proc getChildren*(view: View): seq[View] =
   view.children
