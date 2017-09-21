@@ -1179,7 +1179,7 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
       let id = toKeyWord(classList)
       ensure(id == wBang)
       # use default classes instead of empty
-      classList = view.node[1]
+      classList = view.node[1].copyTree
 
     let easing = lay.context.getEasing(interpolatorName)
     let anim = Anim(view: view,
