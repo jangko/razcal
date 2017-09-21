@@ -1096,7 +1096,8 @@ proc secView(lay: Layout, n: Node) =
   ensure(n[0].kind == nkSymbol)
   ensure(n[0].sym.kind == skView)
   lay.lastView = n[0].sym.view
-  lay.secViewClass(n[1])
+  let class = n[1].copyTree
+  lay.secViewClass(class)
   let body = n[2].copyTree
   lay.secViewBody(body)
 
@@ -1173,6 +1174,13 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
     if interpolator.isNil:
       lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
 
+    var classList = m[1]
+    if classList.kind == nkIdent:
+      let id = toKeyWord(classList)
+      ensure(id == wBang)
+      # use default classes instead of empty
+      classList = view.node[1]
+
     let easing = lay.context.getEasing(interpolatorName)
     let anim = Anim(view: view,
       interpolator: interpolator,
@@ -1180,7 +1188,7 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
       duration: endAni - startAni,
       destination: destination,
       current: newVarSet(view.name),
-      classList: m[1],
+      classList: classList,
       easing: easing,
       curProp: newPropSet(view.oriProp),
       destProp: destProp)

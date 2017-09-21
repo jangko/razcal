@@ -449,8 +449,13 @@ proc parseTime(p: var Parser): Node =
   p.getTok()
 
 proc parseAnim(p: var Parser): Node =
-  let
-    name    = parseName(p)
+  let name    = parseName(p)
+  var classes = p.emptyNode
+
+  if p.tok.kind == tkBang:    
+    classes = newIdentNodeP(p)
+    p.getTok()
+  else:
     classes = parseViewClassList(p)
 
   var

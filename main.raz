@@ -1,40 +1,50 @@
 box
-  : content: "box"; visible: false
-  @ 
-    left - parent.left = parent.right - right  
+  :
+    content: "box"; visible: false
+    bgColor: rgbf(0.1, 0.8, 0.3)
+
+  @
+    left - parent.left = parent.right - right
     #top - parent.top = parent.bottom - bottom
     centerY = parent.centerY
     height = child[0].height
-    
-::boxStyle(content, h = 30)
-  : content: content
-  @ 
+
+::boxColor(content, color)
+  :
+    bgColor: color
+    content: content
+
+::boxStyle(h = 30, rot = 0)
+  : rotate: rot
+  @
     top - parent.top = parent.bottom - bottom
     left = prev.right + 5 | parent.left
     right = next.left - 5 | parent.right
     width = 30; height = h
-    
-box.box1::boxStyle("1")
-box.box2::boxStyle("2")
-box.box3::boxStyle("3")
-box.box4::boxStyle("4")
-box.box5::boxStyle("5")
-box.box6::boxStyle("6")
-box.box7::boxStyle("7")
-box.box8::boxStyle("8")
+
+::clr(col)
+  : bgColor: col
+
+box.box1::boxStyle::boxColor("1", rgbf(0.9, 0.2, 0.3))
+box.box2::boxStyle::boxColor("2", rgbf(0.8, 0.3, 0.3))
+box.box3::boxStyle::boxColor("3", rgbf(0.7, 0.4, 0.3))
+box.box4::boxStyle::boxColor("4", rgbf(0.6, 0.5, 0.3))
+box.box5::boxStyle::boxColor("5", rgbf(0.5, 0.6, 0.3))
+box.box6::boxStyle::boxColor("6", rgbf(0.4, 0.7, 0.3))
+box.box7::boxStyle::boxColor("7", rgbf(0.3, 0.8, 0.3))
+box.box8::boxStyle::boxColor("8", rgbf(0.2, 0.9, 0.3))
 
 % anim1 0.5
-  box.box1::boxStyle("1", 90) elasticEaseOut
-  box.box2::boxStyle("2", 80) backEaseOut
-  box.box3::boxStyle("3", 70) bounceEaseOut
-  box.box4::boxStyle("4", 60) spring
-  box.box5::boxStyle("5", 50) spring
-  box.box6::boxStyle("6", 40) spring
-  box.box7::boxStyle("7", 30) spring
-  box.box8::boxStyle("8", 20) spring
-  
+  box.box1::boxStyle(90, 360) elasticEaseOut
+  box.box2::boxStyle(80, 360) backEaseOut
+  box.box3::boxStyle(70, 360) bounceEaseOut
+  box.box4::boxStyle(60, 360) spring
+  box.box5::boxStyle(50, 360) spring
+  box.box6::boxStyle(40, 360) spring
+  box.box7::boxStyle(30, 360) spring
+  box.box8::boxStyle(20, 360) spring
+
 % anim2 0.3
-  box.box1::boxStyle("1") elasticEaseIn
-  box.box2::boxStyle("2") backEaseIn
-  box.box3::boxStyle("3") bounceEaseIn
-  
+  box.box1::boxStyle::clr(rgbf(0.1, 0.7, 0.3)) elasticEaseIn
+  box.box2::boxStyle::clr(rgbf(0.1, 0.4, 0.6)) backEaseIn
+  box.box3::boxStyle::clr(rgbf(0.1, 0.3, 0.9)) bounceEaseIn
