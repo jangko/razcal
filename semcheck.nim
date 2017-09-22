@@ -452,8 +452,8 @@ proc selectViewRel(lay: Layout, view: View, id: SpecialWords, idx = 1): View =
         result = result.parent
         inc i
   of wChild:
-    if idx < 0 and view.parent.children.len > 0: return view.children[^1]
-    if idx < view.children.len:
+    if idx < 0 and view.children.len > 0: return view.children[^1]
+    if idx >= 0 and idx < view.children.len:
       result = view.children[idx]
   of wPrev:
     if not view.parent.isNil:
@@ -550,6 +550,15 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
   of nkDotCall:
     let tempView = lay.lastView
     ensure(n.len == 2)
+    if n[1].kind == nkIdent and n[1].ident == lastIdent:
+      if n[0].kind == nkIdent:
+        let lhs = toKeyWord(n[0])
+        let rhs = toKeyWord(n[1])
+        if lhs == wChild and rhs == wCount:
+          result = newNodeI(nkInt, n[1].lineInfo)
+          result.intVal = lay.lastView.children.len
+          return result
+
     n[0] = lay.resolveTerm(n[0], lastIdent, choiceMode)
     if choiceMode and n[0].kind == nkEmpty: return n[0]
     ensure(n[0].kind == nkSymbol)
@@ -573,7 +582,10 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       lay.lastView = tempView
       if view.isNil:
         if choiceMode: return lay.emptyNode
-        else: lay.sourceError(errWrongRelationIndex, n[1], idx)
+        else:
+          echo idx
+          echo n.treeRepr
+          lay.sourceError(errWrongRelationIndex, n, idx)
       view.dependencies.incl(lay.lastView)
       lay.lastView.dependencies.incl(view)
       result = view.symNode
@@ -1240,8 +1252,8 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
     let view = anim.view
     lay.lastView = view
     let body = view.node[2].copyTree
-    lay.secViewBody(body)
     lay.secViewClass(anim.classList)
+    lay.secViewBody(body)
     if anim.interpolator.isNil:
       if view.parent.isNil or view.parent.anim.isNil:
         anim.interpolator = interpolator
