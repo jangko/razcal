@@ -35,6 +35,7 @@ type
     content*: string
     curProp*: PropSet
     oriProp*: PropSet
+    anim*: Anim
 
   Anim* = ref object
     view*: View

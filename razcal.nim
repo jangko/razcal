@@ -272,20 +272,16 @@ proc main =
   L.bindNVG(nvg)
 
   var animState = ANIM_NONE
-  var anim1 = lay.getAnimation("anim1")
-  var anim2 = lay.getAnimation("anim2")
-  var anim  = Animation(nil)
+  var anim = Animation(nil)
 
   proc keyboardCB(win: Win, key: Key, scanCode: int, action: KeyAction, modKeys: ModifierKeySet) =
-    if key == keyF1:
-      if animState == ANIM_NONE and anim != anim1:
-        anim = lay.getAnimation("anim1")
-        animState = ANIM_START
-
-    if key == keyF2:
-      if animState == ANIM_NONE and anim != anim2:
-        anim = lay.getAnimation("anim2")
-        animState = ANIM_START
+    if key in {keyF1..keyF12}:
+      if animState == ANIM_NONE:
+        let id = "anim" & $(ord(key) - ord(keyF1) + 1)
+        let ani = lay.getAnimation(id)
+        if anim != ani and ani != nil:
+          anim = ani
+          animState = ANIM_START
 
   w.keyCb = keyboardCB
   var

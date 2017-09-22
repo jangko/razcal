@@ -2,7 +2,7 @@ import ast, math, macros, strutils
 
 const PI2 = PI / 2
 
-proc linearInterpolation(p: float): float = p
+proc linearInterpolator(p: float): float = p
 
 proc quadraticEaseIn(p: float): float = p * p
 
@@ -148,7 +148,7 @@ macro createInterpolator(n: untyped): untyped =
   result = parseStmt(glue & iTbl & eTbl)
 
 createInterPolator:
-  linearInterpolation
+  linearInterpolator
   quadraticEaseIn
   quadraticEaseOut
   quadraticEaseInOut

@@ -1169,10 +1169,16 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
     startAni = ani.duration * startAni
     endAni = ani.duration * endAni
 
-    let interpolatorName = if m[4].kind == nkIdent: m[4].ident else: lay.getIdent("linearInterpolation")
-    let interpolator = lay.context.getInterpolator(interpolatorName)
-    if interpolator.isNil:
-      lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
+    var
+      easing: EasingFN
+      interpolator: Interpolator
+
+    if m[4].kind == nkIdent:
+      let interpolatorName = m[4].ident
+      interpolator = lay.context.getInterpolator(interpolatorName)
+      if interpolator.isNil:
+        lay.sourceError(errUndefinedInterpolator, m[4], m[4].ident)
+      easing = lay.context.getEasing(interpolatorName)
 
     var classList = m[1]
     if classList.kind == nkIdent:
@@ -1181,7 +1187,6 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
       # use default classes instead of empty
       classList = view.node[1].copyTree
 
-    let easing = lay.context.getEasing(interpolatorName)
     let anim = Anim(view: view,
       interpolator: interpolator,
       startAni: startAni,
@@ -1192,6 +1197,7 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
       easing: easing,
       curProp: newPropSet(view.oriProp),
       destProp: destProp)
+    view.anim = anim
     ani.anims.add(anim)
 
 proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
@@ -1223,12 +1229,28 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
       let anim = newTree(nkAnim, view.node[0], view.node[1], lay.emptyNode, lay.emptyNode, lay.emptyNode)
       addSon(node, anim)
 
+  let
+    linear = lay.getIdent("linearInterpolator")
+    easing = lay.context.getEasing(linear)
+    interpolator = lay.context.getInterpolator(linear)
+
   for anim in ani.anims:
     let view = anim.view
     lay.lastView = view
     let body = view.node[2].copyTree
     lay.secViewBody(body)
     lay.secViewClass(anim.classList)
+    if anim.interpolator.isNil:
+      if view.parent.isNil or view.parent.anim.isNil:
+        anim.interpolator = interpolator
+        anim.easing = easing
+        continue
+      if view.parent.anim.interpolator.isNil:
+        anim.interpolator = interpolator
+        anim.easing = easing
+      else:
+        anim.interpolator = view.parent.anim.interpolator
+        anim.easing = view.parent.anim.easing
 
   ani.solver.updateVariables()
 
