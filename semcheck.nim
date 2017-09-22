@@ -581,6 +581,8 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       lay.sourceError(errUndefinedRel, n[0], n[0].ident)
   of nkString:
     lay.sourceError(errStringNotAllowed, n)
+  of nkSymbol:
+    result = n
   else:
     internalError(lay, errUnknownNode, n.kind)
 
