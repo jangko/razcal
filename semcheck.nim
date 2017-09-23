@@ -583,9 +583,8 @@ proc resolveTerm(lay: Layout, n: Node, lastIdent: Ident, choiceMode = false): No
       if view.isNil:
         if choiceMode: return lay.emptyNode
         else:
-          echo idx
-          echo n.treeRepr
-          lay.sourceError(errWrongRelationIndex, n, idx)
+          let node = if n[1].kind == nkEmpty: n else: n[1]
+          lay.sourceError(errWrongRelationIndex, node, idx)
       view.dependencies.incl(lay.lastView)
       lay.lastView.dependencies.incl(view)
       result = view.symNode

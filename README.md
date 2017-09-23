@@ -44,67 +44,36 @@ It already and always be easy to build.
 And I'm thinking to use Yaml as configuration script, which is also use indentation based syntax.
 Python?, hmm....., the standard Python is too big, perhaps MicroPython is more suitable.
 
-### roadmap
+### Construction phase
+  
+The [first phase](https://github.com/jangko/razcal/wiki) already done. 
+Now we can move to the next construction phase, a lot of work to do:
 
-right now, razcal pretty much still an embryo.
-The parser, constraint solver engine,
-and lua binding already found it's way to communicate to each other.
-But many features of layout language still not implemented yet,
-backend renderer not available, test suite not available,
-documentation none, tutorial none.
-
-* parser
-  * ~parse comma separated constraint~
-  * ~parse animation description~
-    * ~tkPercent(%) tkIdent(name) tkNumber(duration)~
-    * ~widget(::class)* tkNumber(start_ani) tkNumber(end_ani) tkIdent(interpolator)~
-  * ~parse functional constraint~
+* Parser
+  * parse more styling syntax
+    * text & fonts
+    * colors & backgrounds
+    * transformations
+    * tables
+    * input widget
   * parse conditional constraint
-  * ~parse style section~
-  * ~parse prop section~
-* semantic pass
-  * ~class instantiation~
-    * ~collecting param~
-    * ~param substitution~
-    * ~argument checking with or without default argument~
-    * ~class copying~
-    * ~instantiation with or without default argument~
-    * ~semcheck~
-  * ~animation instantiation:~
-    * ~two sets of variables: origin and destination~
-      * ~collect who participated in animation~
-    * ~two sets of constraint and solver~
-      * ~constraints can be contained in class~
-    * ~a temporary set of variable during transition returned from interpolator~
-      * ~predefined or user defined interpolator~
-    * ~after animation ended: discard origin, put destination to origin~
-    * ~animation clock~
+  * overflow/scrolling content
+  * content size constraint
+* Semantic pass
+  * activating more style
   * applying functional constraint
   * applying conditional constraint
-  * ~applying prop to view~
-  * ~applying style to view~
   * exposing events to lua
-* ~lua binding~
-  * ~fix cfunction argument validation~
-  * ~reimplement metatable for userdata~
-  * ~add error reporting mechanism without using lua_error~
-  * ~expose everything in layout to lua safely~
-  * ~call lua from nim~
-* ~renderer~
-  * ~bring up crude renderer to design backend api~
-    * ~test glfw~
-    * ~test nanovg on glfw~
-    * ~render something from razcal on nanovg~
-* test suite
-  * robust test suite for both Nim and Lua side
-  * automated build system + test
+* API
+  * widget geometry
+  * anim/hierarchy
+  * style 
+  * events
+* Test
+  * conditional compilation system
+  * robust test suite for Nim 
+  * for Lua side
+  * automated build system
+* Docs
   * documentation
   * tutorial
-
-The first screenshot ever:
-
-![Screenshot](examples/screenshot-1.png)
-
-The first working animation:
-
-![Animation](examples/animation-1.gif)
