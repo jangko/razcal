@@ -35,9 +35,9 @@ type
     content*: string
     curProp*: PropSet
     oriProp*: PropSet
-    anim*: Anim
+    actor*: Actor
 
-  Anim* = ref object
+  Actor* = ref object
     view*: View
     classList*: Node
     interpolator*: Interpolator
@@ -51,7 +51,7 @@ type
 
   Animation* = ref object of IDobj
     duration*: float64
-    anims*: seq[Anim]
+    actors*: seq[Actor]
     solver*: kiwi.Solver
 
   ClassContext* = ref object

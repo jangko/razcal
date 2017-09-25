@@ -1200,7 +1200,7 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
       # use default classes instead of empty
       classList = view.node[1].copyTree
 
-    let anim = Anim(view: view,
+    let actor = Actor(view: view,
       interpolator: interpolator,
       startAni: startAni,
       duration: endAni - startAni,
@@ -1210,8 +1210,8 @@ proc processAnimAux(lay: Layout, aniNode, n: Node, ani: Animation, dependencies,
       easing: easing,
       curProp: newPropSet(view.oriProp),
       destProp: destProp)
-    view.anim = anim
-    ani.anims.add(anim)
+    view.actor = actor
+    ani.actors.add(actor)
 
 proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
   lay.solver = ani.solver
@@ -1247,23 +1247,23 @@ proc processAnim(lay: Layout, aniNode, n: Node, ani: Animation) =
     easing = lay.context.getEasing(linear)
     interpolator = lay.context.getInterpolator(linear)
 
-  for anim in ani.anims:
-    let view = anim.view
+  for actor in ani.actors:
+    let view = actor.view
     lay.lastView = view
     let body = view.node[2].copyTree
-    lay.secViewClass(anim.classList)
+    lay.secViewClass(actor.classList)
     lay.secViewBody(body)
-    if anim.interpolator.isNil:
-      if view.parent.isNil or view.parent.anim.isNil:
-        anim.interpolator = interpolator
-        anim.easing = easing
+    if actor.interpolator.isNil:
+      if view.parent.isNil or view.parent.actor.isNil:
+        actor.interpolator = interpolator
+        actor.easing = easing
         continue
-      if view.parent.anim.interpolator.isNil:
-        anim.interpolator = interpolator
-        anim.easing = easing
+      if view.parent.actor.interpolator.isNil:
+        actor.interpolator = interpolator
+        actor.easing = easing
       else:
-        anim.interpolator = view.parent.anim.interpolator
-        anim.easing = view.parent.anim.easing
+        actor.interpolator = view.parent.actor.interpolator
+        actor.easing = view.parent.actor.easing
 
   ani.solver.updateVariables()
 

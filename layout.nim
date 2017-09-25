@@ -141,7 +141,7 @@ proc findChild*(view: View, id: Ident): View =
 proc newAnimation*(duration: float64): Animation =
   new(result)
   result.duration = duration
-  result.anims = @[]
+  result.actors = @[]
   result.solver = newSolver()
 
 # procs this needed for pivot mechanism

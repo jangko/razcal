@@ -271,17 +271,17 @@ proc main =
   nvg.loadFonts()
   L.bindNVG(nvg)
 
-  var animState = ANIM_NONE
+  var actorstate = ANIM_NONE
   var anim = Animation(nil)
 
   proc keyboardCB(win: Win, key: Key, scanCode: int, action: KeyAction, modKeys: ModifierKeySet) =
     if key in {keyF1..keyF12}:
-      if animState == ANIM_NONE:
+      if actorstate == ANIM_NONE:
         let id = "anim" & $(ord(key) - ord(keyF1) + 1)
         let ani = lay.getAnimation(id)
         if anim != ani and ani != nil:
           anim = ani
-          animState = ANIM_START
+          actorstate = ANIM_START
 
   w.keyCb = keyboardCB
   var
@@ -304,11 +304,11 @@ proc main =
     nvg.stroke(0.0, 0.5, 1.0, 1.0, stroke_width)
     nvg.endFrame()
 
-    case animState
+    case actorstate
     of ANIM_START:
       startTime = getTime()
-      animState = ANIM_RUN
-      for a in anim.anims:
+      actorstate = ANIM_RUN
+      for a in anim.actors:
         a.interpolator(a.view.origin, a.destination, a.current, 0.0)
         a.view.current = a.current
         a.view.curProp = a.curProp
@@ -316,7 +316,7 @@ proc main =
       nvg.beginFrame(s.w.cint, s.h.cint, 1.0)
 
       let elapsed = getTime() - startTime
-      for a in anim.anims:
+      for a in anim.actors:
         if elapsed >= a.startAni:
           let timeCurve = (elapsed - a.startAni) / a.duration
           a.interpolator(a.view.origin, a.destination, a.current, timeCurve)
@@ -329,11 +329,11 @@ proc main =
       lay.root.drawView(nvg)
       nvg.endFrame()
       w.swapBufs()
-      if elapsed > anim.duration: animState = ANIM_STOP
+      if elapsed > anim.duration: actorstate = ANIM_STOP
     of ANIM_STOP:
-      for a in anim.anims:
+      for a in anim.actors:
         a.view.setOrigin(a.destination, a.destProp)
-      animState = ANIM_NONE
+      actorstate = ANIM_NONE
     else:
       lay.root.drawView(nvg)
       nvg.endFrame()
